@@ -64,6 +64,29 @@ jobs:
             echo "target_ref=" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Close superseded bump PRs
+        # A bump PR is redundant once its ref is already recorded in
+        # dsh-ref.json on master (the bump landed via a manual commit or a
+        # previous merge). The bot cannot know that when it opens the PR, so
+        # every run sweeps open bump PRs and closes the ones that are complete.
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CURRENT="$(node -p "JSON.parse(require('fs').readFileSync('desktop/dsh-ref.json','utf8')).ref.slice(0,12)")"
+          gh pr list --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | test("^chore/dsh-bump-")) | [.number, .headRefName] | @tsv' |
+            while IFS=$'\t' read -r num head; do
+              ref="${head#chore/dsh-bump-}"
+              if [ "${ref}" = "${CURRENT}" ]; then
+                echo "closing PR #${num} — bump for ${ref} is already on master"
+                gh pr close "${num}" --comment \
+                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已包含在 master 的 dsh-ref.json 中，无需合并。上游下次发版时 check-upstream 会重新提出 bump PR。" \
+                  || true
+              fi
+            done
+
       - name: Open or update bump PR
         if: steps.check.outputs.target_ref != ''
         env:
