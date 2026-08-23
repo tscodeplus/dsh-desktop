@@ -3,7 +3,7 @@
 > A community desktop build of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — **this project is a community desktop version built on DeepSeek Harness, not an official DeepSeek product.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tscodeplus/deepseek-harness-desktop)](https://github.com/tscodeplus/deepseek-harness-desktop/releases)
+[![Release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -56,7 +56,7 @@ Key decisions:
 
 ## Installation
 
-Download the latest installer from the [Releases](https://github.com/tscodeplus/deepseek-harness-desktop/releases) page:
+Download the latest installer from the [Releases](https://github.com/tscodeplus/dsh-desktop/releases) page:
 
 | Platform | Artifact |
 |---|---|

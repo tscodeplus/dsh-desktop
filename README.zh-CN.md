@@ -3,7 +3,7 @@
 > 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的社区桌面版本 —— **本项目是基于 DeepSeek Harness 构建的社区桌面版本，并非 DeepSeek 官方产品。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tscodeplus/deepseek-harness-desktop)](https://github.com/tscodeplus/deepseek-harness-desktop/releases)
+[![Release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
 
 [English](README.md) · **中文**
 
@@ -56,7 +56,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/tscodeplus/deepseek-harness-desktop/releases) 页面下载最新安装包：
+从 [Releases](https://github.com/tscodeplus/dsh-desktop/releases) 页面下载最新安装包：
 
 | 平台 | 安装包 |
 |---|---|

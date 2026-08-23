@@ -22,7 +22,7 @@ const FRAGMENTS = fs
   .sort();
 const OUT = path.join(DESKTOP, 'engine-manifest.json');
 const BASE_URL =
-  'https://github.com/tscodeplus/deepseek-harness-desktop/releases/download/engine';
+  'https://github.com/tscodeplus/dsh-desktop/releases/download/engine';
 
 if (FRAGMENTS.length === 0) {
   console.error('[merge-engine-manifest] no engine-fragment-*.json found — run package-engine.cjs first');

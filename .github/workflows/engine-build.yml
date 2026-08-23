@@ -34,7 +34,7 @@ permissions:
 
 env:
   UPSTREAM_REPO: deepseek-ai/deepseek-harness
-  DESKTOP_REPO: tscodeplus/deepseek-harness-desktop
+  DESKTOP_REPO: tscodeplus/dsh-desktop
   ENGINE_TAG: engine
 
 jobs:

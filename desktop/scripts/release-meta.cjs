@@ -49,8 +49,8 @@ function main() {
     `version: ${version}`,
     `files:`,
     ...fileEntries.map(
-      // Quote the url: "DeepSeek-Harness-Desktop-Setup-0.1.0.exe" may contain
-      // spaces (legacy names did) and
+      // Quote the url: "DSH-Desktop-Setup-0.1.0.exe" may contain
+      // spaces (legacy NSIS names did) and
       // the updater's YAML reader (parseLatestYml) must capture the full path.
       (f) => `  - url: "${f.fileName}"\n    sha512: ${f.sha512}\n    size: ${f.size}`,
     ),

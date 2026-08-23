@@ -318,7 +318,7 @@ export class AppUpdater {
     const currentVersion = process.env.DSHD_APP_VERSION ?? '0.0.0';
 
     // Fetch releases from GitHub REST API.
-    const apiUrl = 'https://api.github.com/repos/tscodeplus/deepseek-harness-desktop/releases?per_page=30';
+    const apiUrl = 'https://api.github.com/repos/tscodeplus/dsh-desktop/releases?per_page=30';
     const resp = await fetchWithProxy(apiUrl, {
       headers: { Accept: 'application/vnd.github.v3+json' },
       signal: AbortSignal.timeout(10_000),
@@ -386,7 +386,7 @@ export class AppUpdater {
         : process.platform === 'darwin'
           ? 'latest-mac.yml'
           : 'latest-linux.yml';
-    const latestYmlUrl = `https://github.com/tscodeplus/deepseek-harness-desktop/releases/download/${release.tag_name}/${ymlName}`;
+    const latestYmlUrl = `https://github.com/tscodeplus/dsh-desktop/releases/download/${release.tag_name}/${ymlName}`;
     diagLog(`checkForUpdateResult: fetching ${latestYmlUrl}`);
     const ymlResp = await fetchWithProxy(latestYmlUrl, { signal: AbortSignal.timeout(10_000) });
     if (!ymlResp.ok) {
@@ -449,7 +449,7 @@ export class AppUpdater {
     if (!fileInfo) {
       throw new Error('No files in update info');
     }
-    const downloadUrl = `https://github.com/tscodeplus/deepseek-harness-desktop/releases/download/v${update.version}/${fileInfo.url}`;
+    const downloadUrl = `https://github.com/tscodeplus/dsh-desktop/releases/download/v${update.version}/${fileInfo.url}`;
     const downloadsDir = path.join(process.env.DSHD_HOME ?? '.', 'downloads');
 
     // Shared resumable download (see download.ts) — same semantics as the
@@ -510,7 +510,7 @@ export class AppUpdater {
     }
     if (this.isMacOSUnsigned()) {
       diagLog('installUpdate: unsigned macOS build — opening GitHub Releases');
-      void shellFetch('/open-external', { url: 'https://github.com/tscodeplus/deepseek-harness-desktop/releases' });
+      void shellFetch('/open-external', { url: 'https://github.com/tscodeplus/dsh-desktop/releases' });
       return;
     }
 
@@ -529,7 +529,7 @@ export class AppUpdater {
 
     diagLog('installUpdate: no compatible install path (mac non-unsigned not yet supported)');
     // macOS signed builds: future tauri-plugin-updater / manual flow.
-    void shellFetch('/open-external', { url: 'https://github.com/tscodeplus/deepseek-harness-desktop/releases' });
+    void shellFetch('/open-external', { url: 'https://github.com/tscodeplus/dsh-desktop/releases' });
   }
 
   cancelDownload(): void {
@@ -819,7 +819,7 @@ export class AppUpdater {
   var _lastPct=0;
   document.getElementById('btn-close').addEventListener('click',function(){api.cancelDownload();window.__dshDialog.close()});
   document.getElementById('btn-install').addEventListener('click',function(){api.installUpdate()});
-  document.getElementById('btn-releases').addEventListener('click',function(){window.open('https://github.com/tscodeplus/deepseek-harness-desktop/releases')});
+  document.getElementById('btn-releases').addEventListener('click',function(){window.open('https://github.com/tscodeplus/dsh-desktop/releases')});
   api.onUpdateDownloadProgress(function(d){
     var pct=Math.round(d.percent);
     if(pct<_lastPct)return; _lastPct=pct;
@@ -873,8 +873,8 @@ export class AppUpdater {
   /** Log proxy / connectivity diagnostics (fetch-based, no Electron session). */
   private async runNetworkDiagnostic(): Promise<void> {
     const testUrls = [
-      { label: 'GitHub API', url: 'https://api.github.com/repos/tscodeplus/deepseek-harness-desktop/releases/latest' },
-      { label: 'latest.yml (beta3)', url: 'https://github.com/tscodeplus/deepseek-harness-desktop/releases/download/v2.0.0-beta3/latest.yml' },
+      { label: 'GitHub API', url: 'https://api.github.com/repos/tscodeplus/dsh-desktop/releases/latest' },
+      { label: 'latest.yml (beta3)', url: 'https://github.com/tscodeplus/dsh-desktop/releases/download/v2.0.0-beta3/latest.yml' },
     ];
     for (const { label, url } of testUrls) {
       try {

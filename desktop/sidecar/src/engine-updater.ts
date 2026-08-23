@@ -26,7 +26,7 @@ import { compareVersions } from './updater.js';
 // The manifest is the single source of truth for what is published (无状态:
 // no CI-side state file — the app asks GitHub what the latest asset is).
 const ENGINE_MANIFEST_URL =
-  'https://github.com/tscodeplus/deepseek-harness-desktop/releases/download/engine/engine-manifest.json';
+  'https://github.com/tscodeplus/dsh-desktop/releases/download/engine/engine-manifest.json';
 
 /** Provenance file written into the built closure by fetch-dsh.cjs. */
 export interface EngineRef {
