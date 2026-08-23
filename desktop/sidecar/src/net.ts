@@ -114,7 +114,7 @@ export async function fetchWithProxy(
   if (!isLoopback) {
     headers = new Headers(headers);
     if (!headers.has('user-agent')) {
-      headers.set('user-agent', 'DeepSeek Harness-Desktop');
+      headers.set('user-agent', 'DSH Desktop');
     }
   }
   if (isLoopback || !proxyAgent) {

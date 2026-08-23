@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop",
   "version": "0.4.0",
-  "description": "DeepSeek Harness Desktop — Tauri 2 shell + Node sidecar for the dsh agent harness",
+  "description": "DSH Desktop — Tauri 2 shell + Node sidecar for the dsh agent harness",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.7.0",
@@ -15,6 +15,7 @@
     "tauri:build:win": "tauri build --bundles nsis",
     "tauri:build:mac": "tauri build --bundles app",
     "bundle-deps": "node scripts/bundle-deps.cjs",
+    "gen:icons": "python scripts/gen-icons.py",
     "smoke-test": "node scripts/smoke-test.cjs",
     "test": "vitest run"
   },

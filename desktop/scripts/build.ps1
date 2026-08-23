@@ -1,5 +1,5 @@
 # ============================================================================
-# DeepSeek Harness Desktop Build Script
+# DSH Desktop Build Script
 # ============================================================================
 # Automates: WSL sync → dsh fetch/build (single-mode git-follow) → dep
 # flattening → sidecar build → Node runtime fetch → Tauri packaging
@@ -16,7 +16,7 @@
 #   .\scripts\build.ps1 -CheckOnly       # Only verify prerequisites
 #
 # From WSL2:
-#   powershell.exe -File "E:\Code\deepseek-harness-desktop\desktop\scripts\build.ps1"
+#   powershell.exe -File "E:\Code\dsh-desktop\desktop\scripts\build.ps1"
 # ============================================================================
 
 param(
@@ -235,8 +235,8 @@ function Invoke-KillStaleProcesses {
 
 # Default WSL source path (Linux side) and Windows target path.
 # Override via environment variables or edit the defaults below.
-$WslSourcePath = if ($env:DSHD_WSL_SRC) { $env:DSHD_WSL_SRC } else { "/home/iwapu/projects/deepseek-harness-desktop/" }
-$WinTargetPath  = if ($env:DSHD_WIN_TARGET) { $env:DSHD_WIN_TARGET } else { "E:\Code\deepseek-harness-desktop" }
+$WslSourcePath = if ($env:DSHD_WSL_SRC) { $env:DSHD_WSL_SRC } else { "/home/iwapu/projects/dsh-desktop/" }
+$WinTargetPath  = if ($env:DSHD_WIN_TARGET) { $env:DSHD_WIN_TARGET } else { "E:\Code\dsh-desktop" }
 
 function Invoke-SyncCode {
     Write-Step "Syncing code from WSL"
@@ -250,7 +250,7 @@ function Invoke-SyncCode {
         return
     }
 
-    # Convert Windows path (E:\Code\deepseek-harness-desktop) to WSL path
+    # Convert Windows path (E:\Code\dsh-desktop) to WSL path
     $winDrive = ($WinTargetPath -replace '^([A-Za-z]):.*', '$1').ToLower()
     $wslTarget = $WinTargetPath -replace '^[A-Za-z]:', "/mnt/$winDrive" -replace '\\', '/'
 
@@ -452,15 +452,15 @@ function Invoke-TauriBuild {
     }
 
     # tauri v2 has no artifact-name config — the NSIS file comes out as
-    # DeepSeek Harness_<v>_x64-setup.exe. Rename to the canonical
-    # DeepSeek-Harness-Desktop-Setup-<v>.exe so the updater's latest.yml URL
+    # DSH Desktop_<v>_x64-setup.exe. Rename to the canonical
+    # DSH-Desktop-Setup-<v>.exe so the updater's latest.yml URL
     # keeps working, then write latest.yml next to it.
     $setup = Get-LatestInstaller
     if ($setup) {
         $version = (Get-Content "$DesktopDir\package.json" | ConvertFrom-Json).version
         # Rename-Item never overwrites an existing target, even with -Force —
         # drop a stale installer from a previous build first.
-        $target = "DeepSeek-Harness-Desktop-Setup-$version.exe"
+        $target = "DSH-Desktop-Setup-$version.exe"
         $targetPath = "$DesktopDir\src-tauri\target\release\bundle\nsis\$target"
         try {
             if (Test-Path $targetPath) { Remove-Item $targetPath -Force -ErrorAction Stop }
@@ -510,7 +510,7 @@ function Write-Summary {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Magenta
-Write-Host " DeepSeek Harness Desktop Builder" -ForegroundColor Magenta
+Write-Host " DSH Desktop Builder" -ForegroundColor Magenta
 Write-Host "========================================" -ForegroundColor Magenta
 Write-Host "  Portable : $Portable" -ForegroundColor Gray
 Write-Host "  NSIS     : $Nsis" -ForegroundColor Gray

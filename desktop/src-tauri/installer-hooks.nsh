@@ -1,4 +1,4 @@
-; NSIS hooks for the DeepSeek Harness Desktop installer/uninstaller.
+; NSIS hooks for the DSH Desktop installer/uninstaller.
 ; Referenced from tauri.conf.json > bundle > windows > nsis > installerHooks
 ; and included at the top of tauri's installer.nsi.
 ;

@@ -1,7 +1,7 @@
 {
   "name": "dsh-sidecar",
   "version": "0.4.0",
-  "description": "DeepSeek Harness Desktop Sidecar — spawns and supervises the dsh web server as a child of the Tauri shell",
+  "description": "DSH Desktop Sidecar — spawns and supervises the dsh web server as a child of the Tauri shell",
   "private": true,
   "type": "module",
   "engines": {

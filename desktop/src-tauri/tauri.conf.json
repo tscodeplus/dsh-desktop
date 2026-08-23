@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DeepSeek Harness",
+  "productName": "DSH Desktop",
   "version": "0.4.0",
-  "identifier": "com.deepseekharness.desktop",
+  "identifier": "com.dshd.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev:sidecar",
     "devUrl": "http://127.0.0.1:3080",

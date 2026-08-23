@@ -33,7 +33,7 @@ pub fn create_tray(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<()> {
     // would stay frozen at its initial state ("服务启动中…").
     let mut builder = TrayIconBuilder::with_id("main")
         .menu(&menu)
-        .tooltip("DeepSeek Harness")
+        .tooltip("DSH Desktop")
         .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -46,7 +46,7 @@ pub fn create_tray(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<()> {
             }
         });
 
-    // Prefer a 16px tray icon; fall back to the app icon.
+    // Dedicated tray icon; fall back to the app icon.
     if let Some(icon) = load_tray_icon(app) {
         builder = builder.icon(icon);
     }
@@ -55,8 +55,9 @@ pub fn create_tray(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<()> {
 }
 
 fn load_tray_icon(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
-    // 16×16 tray asset (same one the Electron build used) — the 512px app
-    // icon downscaled to tray size renders blurry on Windows.
+    // Dedicated 128x128 tray asset (tight-cropped glyph from
+    // assets/icon-source.svg via scripts/gen-icons.py) — a downscaled app icon
+    // renders muddy at tray size on Windows.
     tauri::image::Image::from_bytes(include_bytes!("../../assets/tray-icon.png")).ok()
         .or_else(|| app.default_window_icon().cloned().map(|i| i.to_owned()))
 }

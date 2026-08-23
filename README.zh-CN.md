@@ -1,4 +1,4 @@
-# DeepSeek Harness Desktop
+# DSH Desktop
 
 > 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的社区桌面版本 —— **本项目是基于 DeepSeek Harness 构建的社区桌面版本，并非 DeepSeek 官方产品。**
 
@@ -7,7 +7,7 @@
 
 [English](README.md) · **中文**
 
-**DeepSeek Harness Desktop** 将官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）智能体框架封装为原生桌面应用，支持 **Windows (x64)** 与 **macOS（Intel x64 + Apple Silicon arm64）**。项目采用 **Tauri 2 + Node.js sidecar** 的「壳 + 副进程」架构（该架构参考了 [OhMyAgent](https://github.com/tscodeplus/OhMyAgent) 并已被验证成熟）。
+**DSH Desktop** 将官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）智能体框架封装为原生桌面应用，支持 **Windows (x64)** 与 **macOS（Intel x64 + Apple Silicon arm64）**。项目采用 **Tauri 2 + Node.js sidecar** 的「壳 + 副进程」架构（该架构参考了 [OhMyAgent](https://github.com/tscodeplus/OhMyAgent) 并已被验证成熟）。
 
 用户无需执行 `npx @deepseek-ai/dsh web` 或长期开着终端：安装即用。应用内置运行时启动本地 `dsh web` 服务，WebView 以同源方式加载 `http://127.0.0.1:3080`，托盘图标、单实例保护和自动更新等桌面能力开箱即用。
 
@@ -24,7 +24,7 @@
 - **仅限本地** —— dsh 只监听 `http://127.0.0.1:3080`，同源加载，无远程网关
 - **健壮的生命周期管理** —— 壳拉起 sidecar、sidecar 拉起 `dsh web`；心跳检测 + Windows Job Object 保证退出/崩溃/卸载后无孤儿进程
 - **系统托盘 + 单实例** —— 最小化到托盘、关闭到托盘、开机自启、防重复启动
-- **官方蓝鲸图标** —— 字节级取自上游 dsh favicon；任务栏/托盘图标清晰，注入式标题栏支持深色模式
+- **定制鲸鱼图标** —— 原创鲸鱼标识，白圆底构图独立设计；任务栏/托盘图标清晰，注入式标题栏支持深色模式
 - **无边框 + 注入式标题栏** —— **不改上游源码**：拖拽区 + 最小化/最大化/关闭按钮悬浮覆盖页面，随主题变色
 - **确定性依赖跟随** —— 构建产物与 `desktop/dsh-ref.json` 钉住的上游 commit 一一对应（单一模式 git-follow，无 fork、无补丁冲突）
 
@@ -60,9 +60,9 @@
 
 | 平台 | 安装包 |
 |---|---|
-| Windows x64 | `DeepSeek-Harness-Desktop-Setup-<版本>.exe`（NSIS，LZMA 压缩） |
-| macOS Intel | `DeepSeek-Harness-Desktop-<版本>.dmg` |
-| macOS Apple Silicon | `DeepSeek-Harness-Desktop-<版本>-arm64.dmg` |
+| Windows x64 | `DSH-Desktop-Setup-<版本>.exe`（NSIS，LZMA 压缩） |
+| macOS Intel | `DSH-Desktop-<版本>.dmg` |
+| macOS Apple Silicon | `DSH-Desktop-<版本>-arm64.dmg` |
 
 说明：
 

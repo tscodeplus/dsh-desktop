@@ -1,4 +1,4 @@
-// DeepSeek Harness Desktop — Tauri shell around the DeepSeek Harness Node server (sidecar).
+// DSH Desktop — Tauri shell around the DeepSeek Harness Node server (sidecar).
 //
 // Shell responsibilities (mirroring the former Electron main process):
 //   · spawn / supervise the Node sidecar (see sidecar.rs)

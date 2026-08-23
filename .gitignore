@@ -1,11 +1,28 @@
-# Build artifacts (shell)
-desktop/.sidecar-deps/
-desktop/.dsh-build/
+# Build artifacts (shell) — scripts currently output to desktop/, but older
+# runs left the same dirs at repo root; match both levels.
+.sidecar-deps/
+.dsh-build/
 desktop/src-tauri/target/
+
+# Local agent state
+.omo/
+
+# One-off scratch files from icon design work (dotfiles in scripts/)
+desktop/scripts/.*
 desktop/dsh-engine-*.tar.gz
+desktop/scripts/*.rgba
+desktop/scripts/*.raw
+desktop/scripts/*.bin
+desktop/scripts/dsh-logo-*.png
+desktop/scripts/bbox.json
+desktop/scripts/geom.json
+desktop/scripts/preview-dark.png
 desktop/engine-fragment-*.json
 desktop/engine-manifest.json
 desktop/src-tauri/gen/
+
+# Python bytecode cache (gen-icons.py)
+__pycache__/
 ui/pages/
 ui/dist/
 node_modules/

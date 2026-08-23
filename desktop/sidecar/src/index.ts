@@ -1,4 +1,4 @@
-// DeepSeek Harness Desktop sidecar entry — runs the dsh (DeepSeek Harness)
+// DSH Desktop sidecar entry — runs the dsh (DeepSeek Harness)
 // web server as a child process, spawned by the Tauri shell.
 //
 // Unlike OhMyAgent (whose gateway was imported in-process via bootstrap()),

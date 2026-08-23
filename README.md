@@ -1,4 +1,4 @@
-# DeepSeek Harness Desktop
+# DSH Desktop
 
 > A community desktop build of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — **this project is a community desktop version built on DeepSeek Harness, not an official DeepSeek product.**
 
@@ -7,7 +7,7 @@
 
 **English** · [中文](README.zh-CN.md)
 
-**DeepSeek Harness Desktop** packages the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) agent harness into a native desktop application for **Windows (x64)** and **macOS (Intel x64 + Apple Silicon arm64)**. It is built with **Tauri 2** and a **Node.js sidecar**, following a "shell + sidecar" architecture proven by [OhMyAgent](https://github.com/tscodeplus/OhMyAgent).
+**DSH Desktop** packages the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) agent harness into a native desktop application for **Windows (x64)** and **macOS (Intel x64 + Apple Silicon arm64)**. It is built with **Tauri 2** and a **Node.js sidecar**, following a "shell + sidecar" architecture proven by [OhMyAgent](https://github.com/tscodeplus/OhMyAgent).
 
 Instead of running `npx @deepseek-ai/dsh web` and keeping a terminal open, users get an install-and-go desktop app: the bundled runtime starts the local `dsh web` server, the WebView loads it at `http://127.0.0.1:3080`, and the tray icon, single-instance guard, and auto-updater handle the desktop experience.
 
@@ -24,7 +24,7 @@ This project is a **community desktop version built on [DeepSeek Harness](https:
 - **Local-only by design** — dsh serves `http://127.0.0.1:3080`, loaded same-origin with no remote gateway
 - **Robust lifecycle** — the shell spawns the sidecar, which spawns `dsh web`; heartbeat + Job Object (Windows) guarantee no orphan processes on quit, crash, or uninstall
 - **System tray & single instance** — minimize to tray, close-to-tray, auto-start options, duplicate-launch guard
-- **Official blue whale icon** — taken byte-for-byte from the upstream dsh favicon; crisp taskbar/tray icons and dark-mode-aware injected title bar
+- **Custom whale icon** — an original whale mark with its own white-disc composition; crisp taskbar/tray icons and dark-mode-aware injected title bar
 - **Frameless, injected title bar** — no upstream source modification; drag region + minimize/maximize/close buttons overlay the page, theme-aware
 - **Deterministic dependency following** — the app builds from the upstream git commit pinned in `desktop/dsh-ref.json` (single-mode git-follow, no fork, no patch conflicts)
 
@@ -60,9 +60,9 @@ Download the latest installer from the [Releases](https://github.com/tscodeplus/
 
 | Platform | Artifact |
 |---|---|
-| Windows x64 | `DeepSeek-Harness-Desktop-Setup-<version>.exe` (NSIS, LZMA) |
-| macOS Intel | `DeepSeek-Harness-Desktop-<version>.dmg` |
-| macOS Apple Silicon | `DeepSeek-Harness-Desktop-<version>-arm64.dmg` |
+| Windows x64 | `DSH-Desktop-Setup-<version>.exe` (NSIS, LZMA) |
+| macOS Intel | `DSH-Desktop-<version>.dmg` |
+| macOS Apple Silicon | `DSH-Desktop-<version>-arm64.dmg` |
 
 Notes:
 

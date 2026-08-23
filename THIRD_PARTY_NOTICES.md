@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-DeepSeek Harness Desktop builds on the following open-source projects. Their
+DSH Desktop builds on the following open-source projects. Their
 licenses are reproduced or linked below; per MIT terms, the copyright notices
 of substantial code contributions are preserved here.
 

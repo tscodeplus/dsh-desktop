@@ -210,23 +210,23 @@ jobs:
         run: cd desktop && npx tauri build --bundles app
 
       # tauri has no artifact-name config (removed in v2) — the NSIS file
-      # comes out as DeepSeek Harness_<v>_x64-setup.exe. Rename to the
-      # canonical DeepSeek-Harness-Desktop-Setup-<v>.exe.
+      # comes out as DSH Desktop_<v>_x64-setup.exe. Rename to the
+      # canonical DSH-Desktop-Setup-<v>.exe.
       - name: Rename installer (updater-friendly name)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $VERSION = node -p "require('./desktop/package.json').version"
           $nsisDir = Join-Path $env:GITHUB_WORKSPACE "desktop/src-tauri/target/release/bundle/nsis"
-          $exe = Get-ChildItem (Join-Path $nsisDir "DeepSeek Harness_*_x64-setup.exe") | Select-Object -First 1
+          $exe = Get-ChildItem (Join-Path $nsisDir "DSH Desktop_*_x64-setup.exe") | Select-Object -First 1
           if (-not $exe) { throw "NSIS installer not found in $nsisDir" }
-          Move-Item -Force $exe.FullName (Join-Path $nsisDir "DeepSeek-Harness-Desktop-Setup-$VERSION.exe")
+          Move-Item -Force $exe.FullName (Join-Path $nsisDir "DSH-Desktop-Setup-$VERSION.exe")
 
       - name: Generate latest.yml metadata
         if: runner.os == 'Windows'
         run: |
           $VERSION = node -p "require('./desktop/package.json').version"
-          $EXE = "desktop/src-tauri/target/release/bundle/nsis/DeepSeek-Harness-Desktop-Setup-$VERSION.exe"
+          $EXE = "desktop/src-tauri/target/release/bundle/nsis/DSH-Desktop-Setup-$VERSION.exe"
           node desktop/scripts/release-meta.cjs "$EXE" $VERSION
 
       - name: Package dmg (hdiutil + prebuilt .DS_Store, no AppleScript)
@@ -235,19 +235,19 @@ jobs:
         # template (app left, /Applications right) — no Finder needed.
         run: |
           VERSION=$(node -p "require('./desktop/package.json').version")
-          APP="desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness.app"
+          APP="desktop/src-tauri/target/release/bundle/macos/DSH Desktop.app"
           DMG_DIR="desktop/src-tauri/target/release/bundle/dmg"
-          DMG="$DMG_DIR/DeepSeek-Harness-Desktop-${VERSION}${{ matrix.artifact_suffix }}.dmg"
+          DMG="$DMG_DIR/DSH-Desktop-${VERSION}${{ matrix.artifact_suffix }}.dmg"
           rm -rf "$DMG_DIR"
           mkdir -p "$DMG_DIR"
           STAGING="$(mktemp -d)"
-          cp -R "$APP" "$STAGING/DeepSeek Harness.app"
+          cp -R "$APP" "$STAGING/DSH Desktop.app"
           ln -s /Applications "$STAGING/Applications"
           cp desktop/scripts/dmg-layout/.DS_Store "$STAGING/.DS_Store"
           # ULMO (LZMA) won the rc2 compression comparison: ~158 MiB vs
           # ~176 MiB for UDBZ (verified on both x64 and arm64).
           for attempt in 1 2 3; do
-            if hdiutil create -volname "DeepSeek Harness" -srcfolder "$STAGING" -ov -format ULMO "$DMG"; then
+            if hdiutil create -volname "DSH Desktop" -srcfolder "$STAGING" -ov -format ULMO "$DMG"; then
               break
             fi
             echo "hdiutil create failed (attempt $attempt/3), retrying in 10s..."
@@ -263,9 +263,9 @@ jobs:
       - name: Smoke test (launch app, check dsh web on 3080)
         if: runner.os == 'macOS'
         run: |
-          APP="desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness.app"
+          APP="desktop/src-tauri/target/release/bundle/macos/DSH Desktop.app"
           BIN="$APP/Contents/MacOS/dsh-desktop"
-          LOG_DIR="$HOME/Library/Application Support/DeepSeek Harness/logs"
+          LOG_DIR="$HOME/.dsh/logs"
           ls -la "$APP/Contents/MacOS/" || true
           file "$BIN" || true
 
@@ -355,7 +355,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p "$GITHUB_WORKSPACE/smoke-logs"
-          cp -R "$HOME/Library/Application Support/DeepSeek Harness/logs/." "$GITHUB_WORKSPACE/smoke-logs/" 2>/dev/null || true
+          cp -R "$HOME/.dsh/logs/." "$GITHUB_WORKSPACE/smoke-logs/" 2>/dev/null || true
 
       - name: Upload smoke logs artifact (macOS, always)
         if: runner.os == 'macOS' && always()
@@ -372,7 +372,7 @@ jobs:
         with:
           name: dsh-desktop-windows-x64
           path: |
-            desktop/src-tauri/target/release/bundle/nsis/DeepSeek-Harness-Desktop-Setup-*.exe
+            desktop/src-tauri/target/release/bundle/nsis/DSH-Desktop-Setup-*.exe
             desktop/src-tauri/target/release/bundle/nsis/latest.yml
           if-no-files-found: error
 
@@ -382,7 +382,7 @@ jobs:
         with:
           name: dsh-desktop-mac-${{ matrix.bundle_platform }}
           path: |
-            desktop/src-tauri/target/release/bundle/dmg/DeepSeek-Harness-Desktop-*${{ matrix.artifact_suffix }}.dmg
+            desktop/src-tauri/target/release/bundle/dmg/DSH-Desktop-*${{ matrix.artifact_suffix }}.dmg
           if-no-files-found: error
 
   # Merge the per-arch dmg entries into a single latest-mac.yml so the mac
@@ -409,8 +409,8 @@ jobs:
           VERSION=$(node -p "require('./desktop/package.json').version")
           # upload-artifact stores the glob's basename at the artifact root
           # (no `dmg/` subdir survives), so look there, not under dmg/.
-          DMG_X64=$(ls mac-x64/DeepSeek-Harness-Desktop-*.dmg | head -1)
-          DMG_ARM64=$(ls mac-arm64/DeepSeek-Harness-Desktop-*-arm64.dmg | head -1)
+          DMG_X64=$(ls mac-x64/DSH-Desktop-*.dmg | head -1)
+          DMG_ARM64=$(ls mac-arm64/DSH-Desktop-*-arm64.dmg | head -1)
           if [ -z "$DMG_X64" ] || [ -z "$DMG_ARM64" ]; then
             echo "missing dmg: x64='$DMG_X64' arm64='$DMG_ARM64'"
             exit 1
@@ -481,14 +481,14 @@ jobs:
           gh release delete "${{ github.ref_name }}" --yes --cleanup-tag 2>/dev/null || true
           if [[ -f "$NOTES_FILE" ]]; then
             gh release create "${{ github.ref_name }}" \
-              --title "DeepSeek Harness Desktop ${{ github.ref_name }}" \
+              --title "DSH Desktop ${{ github.ref_name }}" \
               --notes-file "$NOTES_FILE" \
               $PRERELEASE_FLAG \
               --draft=false \
               "${ASSETS[@]}"
           else
             gh release create "${{ github.ref_name }}" \
-              --title "DeepSeek Harness Desktop ${{ github.ref_name }}" \
+              --title "DSH Desktop ${{ github.ref_name }}" \
               --generate-notes \
               $PRERELEASE_FLAG \
               --draft=false \

@@ -1,8 +1,8 @@
 [package]
 name = "dsh-desktop"
 version = "0.4.0"
-description = "DeepSeek Harness Desktop — Tauri shell for the dsh agent harness (Windows + macOS)"
-authors = ["deepseek-harness-desktop contributors"]
+description = "DSH Desktop — Tauri shell for the dsh agent harness (Windows + macOS)"
+authors = ["dsh-desktop contributors"]
 edition = "2021"
 rust-version = "1.77"
 
