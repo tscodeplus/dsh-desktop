@@ -10,15 +10,16 @@
 # a difference triggers the 3-platform build matrix and an atomic publish
 # (upload --clobber + stale asset cleanup).
 #
-# Triggered daily (01:00 UTC, off the 02:00 check-upstream cron) and
-# manually via workflow_dispatch (inputs.ref overrides the target for tests,
-# e.g. "dsh-v0.1.0-rc.7" or a full sha).
+# Triggered daily (01:13 UTC and 13:13 UTC — Beijing 09:13 / 21:13, off the
+# 02:00 check-upstream cron) and manually via workflow_dispatch (inputs.ref
+# overrides the target for tests, e.g. "dsh-v0.1.0-rc.7" or a full sha).
 
 name: engine-build
 
 on:
   schedule:
     - cron: '13 1 * * *'
+    - cron: '13 13 * * *'
   workflow_dispatch:
     inputs:
       ref:
