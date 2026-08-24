@@ -1,0 +1,23 @@
+# Line endings: LF everywhere, all platforms.
+# text=auto + eol=lf makes Git normalize any CRLF (e.g. files saved by Windows
+# editors) back to LF at add time and check out LF, so the index always holds
+# LF and a Windows-side save produces a clean, single-line diff instead of a
+# whole-file rewrite. Text parsers in the build chain (tsc, vitest, rustc,
+# PowerShell, YAML/JSON, NSIS) are CRLF/LF-agnostic — this exists to keep
+# history readable, not to fix builds.
+* text=auto eol=lf
+
+# Binary formats — Git must never touch or normalize these.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.node  binary
+*.dll   binary
+*.exe   binary
+.DS_Store binary
