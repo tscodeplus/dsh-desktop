@@ -260,7 +260,7 @@ function main() {
     // The build above regenerates every patched artifact (web dist, built
     // host/client libs), so the LAN patches are (re)applied after each build
     // when opted in — see applyRemoteAccessPatches().
-    applyLanPatches(DSH_DIR);
+    applyRemoteAccessPatches(DSH_DIR);
   } else {
     console.log('[fetch-dsh] --no-build: skipping pnpm install + build (source-only closure)');
   }
