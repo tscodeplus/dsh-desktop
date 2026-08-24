@@ -27,6 +27,7 @@ import {
   getEngineUpdater,
   initEngineUpdater,
 } from './engine-updater.js';
+import { repairProfilesModuleFallback } from './fallback-repair.js';
 
 const isDev = process.env.DSHD_DEV === '1';
 const resourcesDir = process.env.DSHD_RESOURCES_DIR ?? process.cwd();
@@ -114,6 +115,18 @@ function spawnDshWeb(webArgs: string[]): ChildProcess {
 }
 
 function spawnDsh(): ChildProcess {
+  // Pre-flight: the dsh boot's fallback health check refuses any real (non-
+  // symlink) entry under <home>/profiles/node_modules and exits code 1 — a
+  // stale EMPTY real dir (an interrupted first-boot link creation) would make
+  // dsh crash forever at every start. Remove such leftovers so dsh re-links.
+  try {
+    const removed = repairProfilesModuleFallback(dshHome);
+    if (removed.length > 0) {
+      console.log(`[sidecar] profiles fallback: removed stale dirs: ${removed.join(', ')}`);
+    }
+  } catch (e) {
+    console.error('[sidecar] profiles fallback repair failed:', e);
+  }
   console.log(`[sidecar] starting dsh web (dev=${isDev}, root=${dshRoot})`);
   if (isDev) {
     // Dev: run exactly like upstream `pnpm dsh web` (tsx loader, src entry).
