@@ -17,15 +17,16 @@
  *     makes the dependency closure reproducible)
  *   · verify the CLI entry the sidecar will spawn; write a provenance manifest
  *   · LAN/Tailscale remote-access patches (crypto shim, privileged-trust
- *     fence, client host-mode) are applied when DSHD_ENABLE_REMOTE_ACCESS is
- *     exactly 'on' — dsh-desktop release CI (desktop-release / engine-build)
- *     and the local build scripts (build.ps1, pnpm tauri:build*) set it, so
- *     released installers carry the patches. Any other value (incl. unset)
- *     yields an UPSTREAM-PURE closure for dev/debug — never ship those. The
- *     patches deliberately alter upstream security boundaries (declared
- *     trustedHosts admit the config plane; no auth), so expose only to
- *     trusted devices. The manifest records the state so the fast path never
- *     reuses a closure built with the opposite state (it rebuilds instead).
+ *     fence, client host-mode, plugin fences) are applied when
+ *     DSHD_ENABLE_REMOTE_ACCESS is exactly 'on' — dsh-desktop release CI
+ *     (desktop-release / engine-build) and the local build scripts
+ *     (build.ps1, pnpm tauri:build*) set it, so released installers carry the
+ *     patches. Any other value (incl. unset) yields an UPSTREAM-PURE closure
+ *     for dev/debug — never ship those. The patches deliberately alter
+ *     upstream security boundaries (declared trustedHosts admit the config
+ *     plane; no auth), so expose only to trusted devices. The manifest
+ *     records the state so the fast path never reuses a closure built with
+ *     the opposite state (it rebuilds instead).
  *
  * Discipline (see docs/IMPLEMENTATION_PLAN.md §5):
  *   · default to release (tag) refs once upstream starts tagging
@@ -39,6 +40,7 @@ const path = require('path');
 const { patchWebUiIndex } = require('./patch-webui-index.cjs');
 const { patchConnectionPrivileges } = require('./patch-connection-privileges.cjs');
 const { patchSettingsOrigin } = require('./patch-settings-origin.cjs');
+const { patchPluginFences } = require('./patch-plugin-fences.cjs');
 
 /**
  * Remote-access patches for the shipped desktop: release CI (both workflows)
@@ -49,9 +51,9 @@ const { patchSettingsOrigin } = require('./patch-settings-origin.cjs');
 const REMOTE_ACCESS = (process.env.DSHD_ENABLE_REMOTE_ACCESS ?? 'off') === 'on';
 
 /**
- * Apply the three dsh-desktop remote-access patch passes (see the patch-*
- * modules) when enabled; log the state either way. Idempotent on
- * already-patched closures.
+ * Apply the dsh-desktop remote-access patch passes (see the patch-* modules)
+ * when enabled; log the state either way. Idempotent on already-patched
+ * closures.
  * @param {string} dshDir - dsh root the patches target.
  * @returns {void}
  */
@@ -66,6 +68,7 @@ function applyRemoteAccessPatches(dshDir) {
   patchWebUiIndex(dshDir);
   patchConnectionPrivileges(dshDir);
   patchSettingsOrigin(dshDir);
+  patchPluginFences(dshDir);
 }
 
 const DESKTOP = path.resolve(__dirname, '..');
