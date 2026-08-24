@@ -113,6 +113,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       DSHD_TARGET_PLATFORM: ${{ matrix.bundle_platform }}
+      # Engine closures must carry the same LAN/Tailscale patch passes as the
+      # desktop release: the sidecar swaps these closures in at runtime on
+      # engine update, so a pure closure would silently drop the remote-access
+      # patches mid-update. Same gate as desktop-release.yml — exactly 'on'.
+      DSHD_ENABLE_REMOTE_ACCESS: on
     steps:
       - uses: actions/checkout@v4
       - name: Pin the target ref in dsh-ref.json
@@ -127,15 +132,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       # The closure's build behavior lives in fetch-dsh.cjs (build env, e.g.
-      # DSH_BUILD_CLIENT_PROFILE=official) and bundle-deps.cjs (what gets
-      # staged). Hash them with the ref, or a fetch-dsh change would silently
-      # reuse a stale closure via the cache fast path (the v0.4.0 engine was
-      # rebuilt-from-cache without the official brand for exactly this).
+      # DSH_BUILD_CLIENT_PROFILE=official), the remote-access patch passes
+      # (patch-*.cjs) and bundle-deps.cjs (what gets staged). Hash them with
+      # the ref, or a fetch-dsh change would silently reuse a stale closure
+      # via the cache fast path (the v0.4.0 engine was rebuilt-from-cache
+      # without the official brand for exactly this).
       - name: Cache dsh build closure
         uses: actions/cache@v4
         with:
           path: desktop/.dsh-build
-          key: dsh-build-engine-${{ matrix.bundle_platform }}-${{ needs.detect.outputs.ref }}-${{ hashFiles('desktop/scripts/fetch-dsh.cjs', 'desktop/scripts/bundle-deps.cjs') }}
+          key: dsh-build-engine-${{ matrix.bundle_platform }}-${{ needs.detect.outputs.ref }}-${{ hashFiles('desktop/scripts/fetch-dsh.cjs', 'desktop/scripts/bundle-deps.cjs', 'desktop/scripts/patch-webui-index.cjs', 'desktop/scripts/patch-connection-privileges.cjs', 'desktop/scripts/patch-settings-origin.cjs') }}
       - name: Install
         working-directory: desktop
         run: pnpm install --frozen-lockfile --config.strict-dep-builds=false

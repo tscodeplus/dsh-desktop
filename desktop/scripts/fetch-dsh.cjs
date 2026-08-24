@@ -16,6 +16,16 @@
  *   · `pnpm install --frozen-lockfile` + `pnpm run build` (upstream lockfile
  *     makes the dependency closure reproducible)
  *   · verify the CLI entry the sidecar will spawn; write a provenance manifest
+ *   · LAN/Tailscale remote-access patches (crypto shim, privileged-trust
+ *     fence, client host-mode) are applied when DSHD_ENABLE_REMOTE_ACCESS is
+ *     exactly 'on' — dsh-desktop release CI (desktop-release / engine-build)
+ *     and the local build scripts (build.ps1, pnpm tauri:build*) set it, so
+ *     released installers carry the patches. Any other value (incl. unset)
+ *     yields an UPSTREAM-PURE closure for dev/debug — never ship those. The
+ *     patches deliberately alter upstream security boundaries (declared
+ *     trustedHosts admit the config plane; no auth), so expose only to
+ *     trusted devices. The manifest records the state so the fast path never
+ *     reuses a closure built with the opposite state (it rebuilds instead).
  *
  * Discipline (see docs/IMPLEMENTATION_PLAN.md §5):
  *   · default to release (tag) refs once upstream starts tagging
@@ -26,6 +36,37 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { patchWebUiIndex } = require('./patch-webui-index.cjs');
+const { patchConnectionPrivileges } = require('./patch-connection-privileges.cjs');
+const { patchSettingsOrigin } = require('./patch-settings-origin.cjs');
+
+/**
+ * Remote-access patches for the shipped desktop: release CI (both workflows)
+ * and the local build scripts set DSHD_ENABLE_REMOTE_ACCESS=on, so released
+ * closures carry them. Unset or any other value = upstream-pure closure
+ * (dev/debug only). Always re-applying each patch is idempotent.
+ */
+const REMOTE_ACCESS = (process.env.DSHD_ENABLE_REMOTE_ACCESS ?? 'off') === 'on';
+
+/**
+ * Apply the three dsh-desktop remote-access patch passes (see the patch-*
+ * modules) when enabled; log the state either way. Idempotent on
+ * already-patched closures.
+ * @param {string} dshDir - dsh root the patches target.
+ * @returns {void}
+ */
+function applyRemoteAccessPatches(dshDir) {
+  if (!REMOTE_ACCESS) {
+    console.log(
+      '[fetch-dsh] remote-access patches OFF — upstream-pure closure (DSHD_ENABLE_REMOTE_ACCESS=on'
+      + ' opts in; release CI and local build scripts set it; dev-only)',
+    );
+    return;
+  }
+  patchWebUiIndex(dshDir);
+  patchConnectionPrivileges(dshDir);
+  patchSettingsOrigin(dshDir);
+}
 
 const DESKTOP = path.resolve(__dirname, '..');
 const BUILD_DIR = path.join(DESKTOP, '.dsh-build');
@@ -101,12 +142,16 @@ function main() {
       if (
         manifest.ref === ref &&
         manifest.platform === TARGET_PLATFORM &&
+        manifest.remoteAccess === REMOTE_ACCESS &&
         fs.existsSync(CLI_ENTRY)
       ) {
         console.log(
           `[fetch-dsh] closure already built for ${TARGET_PLATFORM} @ ${ref.slice(0, 12)} — skipping ` +
             '(use --force to rebuild, or delete .dsh-build)',
         );
+        // Matched closures also carry the patch state they were built with
+        // (manifest.remoteAccess); re-apply only idempotently when enabled.
+        applyRemoteAccessPatches(DSH_DIR);
         return;
       }
     } catch {
@@ -212,6 +257,10 @@ function main() {
       }).trim(),
     };
     sh(`${pnpm} run build`, DSH_DIR, buildEnv);
+    // The build above regenerates every patched artifact (web dist, built
+    // host/client libs), so the LAN patches are (re)applied after each build
+    // when opted in — see applyRemoteAccessPatches().
+    applyLanPatches(DSH_DIR);
   } else {
     console.log('[fetch-dsh] --no-build: skipping pnpm install + build (source-only closure)');
   }
@@ -231,6 +280,9 @@ function main() {
     note: refDoc.note ?? '',
     fetchedAt: new Date().toISOString(),
     cliEntry: fs.existsSync(CLI_ENTRY) ? CLI_ENTRY : null,
+    // Patched state this closure was built with; the fast path refuses to
+    // reuse a closure whose state differs from the current opt-in.
+    remoteAccess: REMOTE_ACCESS,
   };
   fs.writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`[fetch-dsh] done — provenance manifest at ${MANIFEST_FILE}`);
@@ -251,6 +303,7 @@ function main() {
     note: refDoc.note ?? '',
     builtAt: new Date().toISOString(),
     cliEntry: fs.existsSync(CLI_ENTRY) ? CLI_ENTRY : null,
+    remoteAccess: REMOTE_ACCESS,
   };
   fs.writeFileSync(engineRefFile, JSON.stringify(engineRef, null, 2) + '\n');
   console.log(`[fetch-dsh] engine provenance at ${engineRefFile}`);

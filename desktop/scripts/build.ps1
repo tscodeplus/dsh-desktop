@@ -43,6 +43,16 @@ $RootDir = Split-Path -Parent $DesktopDir   # repo root (WSL sync source)
 # GitHub often unreachable from China). Override via NODE_MIRROR.
 $env:NODE_MIRROR = "https://npmmirror.com/mirrors/node"
 
+# Shipped builds carry the dsh LAN/Tailscale patch passes (crypto shim, trust
+# fence, client host-mode): fetch-dsh applies them only when
+# DSHD_ENABLE_REMOTE_ACCESS is exactly 'on'. Unset/off yields an upstream-pure
+# closure (dev/debug only — never ship those). Pre-seed it for every child
+# command below, but keep an explicit pre-set value (someone building a pure
+# dev closure) intact.
+if (-not $env:DSHD_ENABLE_REMOTE_ACCESS) {
+    $env:DSHD_ENABLE_REMOTE_ACCESS = "on"
+}
+
 # Default: build all targets (portable + NSIS)
 # -Portable: only portable
 # -Nsis: only NSIS

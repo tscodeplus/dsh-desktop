@@ -11,6 +11,11 @@ name: Desktop Release
 # Mydocs/IMPLEMENTATION_PLAN.md §5). tauri build's beforeBuildCommand runs
 # fetch:dsh → bundle-deps → build:sidecar; fetch:dsh fast-paths to a no-op
 # when the closure for the pinned ref is already cached.
+#
+# Released installers deliberately carry the LAN/Tailscale patch passes
+# (crypto shim, privileged-trust fence, client host-mode) — opt-in via the
+# DSHD_ENABLE_REMOTE_ACCESS=on job env below, which fetch-dsh requires exactly
+# `on` to apply. Any other value yields an upstream-pure closure (dev only).
 
 on:
   push:
@@ -85,6 +90,11 @@ jobs:
     env:
       # bundle-deps / fetch-node prune and download for this platform.
       DSHD_TARGET_PLATFORM: ${{ matrix.bundle_platform }}
+      # Remote-access patches: dsh-desktop release installers carry the
+      # LAN/Tailscale patch passes (crypto shim, trust fence, client
+      # host-mode). fetch-dsh applies them ONLY when this is exactly 'on';
+      # leave it unset just for upstream-pure dev closures.
+      DSHD_ENABLE_REMOTE_ACCESS: on
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -120,15 +130,16 @@ jobs:
             cargo-${{ matrix.cache_key }}-
 
       # The closure's build behavior lives in fetch-dsh.cjs (build env, e.g.
-      # DSH_BUILD_CLIENT_PROFILE=official) and bundle-deps.cjs (what gets
-      # staged). Hash them with the ref, or a fetch-dsh change would silently
-      # reuse a stale closure via the cache fast path (v0.4.0 shipped the
-      # unbranded "DSH Local Build" engine because of exactly this).
+      # DSH_BUILD_CLIENT_PROFILE=official), the remote-access patch passes
+      # (patch-*.cjs) and bundle-deps.cjs (what gets staged). Hash them with
+      # the ref, or a fetch-dsh change would silently reuse a stale closure
+      # via the cache fast path (v0.4.0 shipped the unbranded "DSH Local
+      # Build" engine because of exactly this).
       - name: Cache dsh build closure
         uses: actions/cache@v5
         with:
           path: desktop/.dsh-build
-          key: dsh-build-${{ matrix.bundle_platform }}-${{ hashFiles('desktop/dsh-ref.json', 'desktop/scripts/fetch-dsh.cjs', 'desktop/scripts/bundle-deps.cjs') }}
+          key: dsh-build-${{ matrix.bundle_platform }}-${{ hashFiles('desktop/dsh-ref.json', 'desktop/scripts/fetch-dsh.cjs', 'desktop/scripts/bundle-deps.cjs', 'desktop/scripts/patch-webui-index.cjs', 'desktop/scripts/patch-connection-privileges.cjs', 'desktop/scripts/patch-settings-origin.cjs') }}
 
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
