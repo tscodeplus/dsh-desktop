@@ -8,21 +8,22 @@
      Branding uses the DSH Desktop identity (matching brand-inject.js in the
      WebUI): the DeepSeek whale mark from assets/icon-source.svg (= the app
      icon), inlined so it stays crisp at any scale. The icon's blues drive
-     the whole palette — primary whale body #4D6BFE, secondary #3D58E8,
-     light #7C93FF, deep #2E42D4. The card is a deep indigo gradient
-     (radial, lit behind the mark: #232c66→#171e4a→#0d1230) with a faint
-     periwinkle edge. The brand pill stays WHITE — the whale's deep blues
-     (#2E42D4/#3D58E8) would vanish on a dark ground, so the white inner
-     acts as the icon plate — bounded by a 1px periwinkle gradient rim
-     (135deg, #aabdfe→#dbe5ff→#e6edff→#c3d1ff) plus a soft blue glow; the
-     "DSH Desktop" wordmark sits inside in the primary blue #4D6BFE
-     (DM Sans 15px/700 — bold synthesized from the embedded 400/500 faces;
-     28px whale mark).
+     the whole palette, but every fill is lifted one step for the dark
+     ground so the mark stays legible with NO white plate behind it: whale
+     body #7C93FF, secondary #5C74F5, light #A9BCFF, deep #4B63F0 (the
+     icon's own #4D6BFE/#3D58E8/#7C93FF/#2E42D4 scale would fall below
+     usable contrast on a dark card). The card is a deep indigo radial
+     gradient, lit behind the mark (#1d2557→#121840→#0a0e27) with a faint
+     periwinkle edge; a soft blue drop-shadow floats the mark off the
+     ground. The "DSH Desktop" wordmark sits beside the mark in soft
+     periwinkle white #E4EAFF — tinted, never pure #fff, so nothing on the
+     card reads as a hard plate (DM Sans 15px/700 — bold synthesized from
+     the embedded 400/500 faces; 28px whale mark).
 
      The loading ring + hint ("Loading plugins…") keep the same family
-     brightened for the dark ground: spinner arc in the light accent
-     #7C93FF on a 25% periwinkle track, hint in #9DB1FF so the status line
-     reads clearly but stays subordinate to the wordmark.
+     brightened for the dark ground: spinner arc in #8FA3FF on a 28%
+     periwinkle track, hint in #A5B6FF so the status line reads clearly but
+     stays subordinate to the wordmark.
 
      The background lives on an inner card that clips at its own
      border-radius; the <body> stays transparent so the corners show the
@@ -56,39 +57,27 @@
     display:flex;flex-direction:column;
     align-items:center;justify-content:center;
     gap:18px;
-    background:radial-gradient(130% 125% at 50% 36%,#232c66 0%,#171e4a 55%,#0d1230 100%);
-    box-shadow:inset 0 0 0 1px rgba(157,177,255,0.14); /* faint edge so the rounded card reads off the desktop */
+    background:radial-gradient(130% 125% at 50% 36%,#1d2557 0%,#121840 55%,#0a0e27 100%);
+    box-shadow:inset 0 0 0 1px rgba(157,177,255,0.16); /* faint edge so the rounded card reads off the desktop */
     border-radius:12px;overflow:hidden;
   }
-  .brand{display:flex;align-items:center;color:#4D6BFE}
-  .brand svg{display:block}
-  .brand-pill{
-    display:inline-flex;padding:1px;border-radius:14px;
-    background:linear-gradient(135deg,#aabdfe 0%,#dbe5ff 38%,#e6edff 62%,#c3d1ff 100%);
-    box-shadow:0 0 0 1px rgba(157,177,255,0.4),0 4px 18px rgba(46,66,212,0.55);
-  }
-  .brand-pill .brand-inner{
-    display:flex;align-items:center;gap:4px;padding:7px 11px;border-radius:12px;background:#fff;
-  }
-  .brand-pill .brand-label{
-    color:#4D6BFE; /* primary whale blue from assets/icon-source.svg */
+  .brand{display:flex;align-items:center;gap:8px}
+  .brand svg{display:block;filter:drop-shadow(0 3px 12px rgba(77,107,254,0.45))}
+  .brand-label{
+    color:#E4EAFF; /* soft periwinkle white — tinted, never pure #fff, so nothing reads as a hard plate */
     font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans SC','PingFang SC',sans-serif;
-    font-size:15px;font-weight:700;line-height:15px;white-space:nowrap;
+    font-size:16px;font-weight:700;line-height:16px;white-space:nowrap;
   }
-  .spinner{width:20px;height:20px;border-radius:50%;border:2px solid rgba(157,177,255,0.25);border-top-color:#7C93FF;animation:spin .8s linear infinite}
-  .hint{font-size:14px;line-height:20px;color:#9DB1FF}
+  .spinner{width:20px;height:20px;border-radius:50%;border:2px solid rgba(157,177,255,0.28);border-top-color:#8FA3FF;animation:spin .8s linear infinite}
+  .hint{font-size:14px;line-height:20px;color:#A5B6FF}
   @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
   <div class="card">
     <div class="brand">
-      <span class="brand-pill">
-      <span class="brand-inner">
-      <svg width="28" height="28" viewBox="0 0 2048 2048" aria-label="DSH Desktop logo">
-  <g transform="translate(49.66 50.13) scale(1.6884702481021228)"><path d="M998.4 141.913043c-26.713043-23.930435-55.652174-44.521739-86.817391-60.660869-36.173913-18.921739-73.46087-32.834783-113.530435-41.182609-34.504348-7.234783-69.565217-11.130435-104.626087-9.460869-42.852174 2.226087-84.034783 10.017391-124.66087 24.486956-35.06087 12.8-68.452174 28.93913-100.173913 49.530435-22.817391 15.026087-45.078261 31.165217-64.556521 50.086956-109.078261 105.73913-220.93913 267.686957-218.156522 428.52174-4.452174 38.956522 7.791304 120.765217 13.913043 144.13913 10.573913 42.852174 25.6 84.034783 48.417392 123.547826 5.008696-15.582609 8.904348-30.052174 14.469565-44.521739 6.678261-18.921739 15.582609-36.730435 25.6-53.982609 25.6-41.73913 61.217391-68.452174 111.860869-72.904348 37.286957-3.33913 72.904348 2.226087 109.078261 8.904348 49.530435 9.46087 98.504348 21.704348 148.591305 27.269566 32.834783 3.895652 65.113043 5.565217 98.504347 3.33913 86.26087-5.565217 161.947826-37.286957 229.843479-88.486957 165.843478-125.773913 161.947826-354.504348 12.243478-488.626087z m-260.452174 421.843479c-27.826087 0-50.086957-23.373913-50.086956-51.756522 0-27.826087 22.817391-51.2 50.643478-50.643478 28.382609 0 51.2 22.817391 51.756522 51.2 0 28.93913-22.817391 51.756522-52.313044 51.2z" fill="#4D6BFE"></path><path d="M370.086957 455.234783c-37.286957-21.147826-79.582609-33.391304-125.773914-33.391305-81.808696 0-154.713043 38.956522-200.904347 99.06087 28.93913 22.817391 65.113043 40.626087 106.295652 46.747826 99.06087 15.582609 182.53913-71.791304 220.382609-112.417391z" fill="#3D58E8"></path><path d="M602.156522 885.982609c-30.052174-30.608696-67.895652-53.982609-111.304348-66.226087-78.469565-22.26087-159.165217-5.008696-220.382609 40.069565 21.704348 29.495652 51.756522 56.765217 89.043478 74.017391 91.269565 42.295652 195.33913-18.921739 242.643479-47.860869z" fill="#7C93FF"></path><path d="M427.965217 1001.182609c-23.373913-1.669565-55.095652-6.678261-80.695652-21.704348-45.634783-27.269565-67.33913-52.313043-76.8-120.208696 23.373913-2.782609 49.530435-1.113043 74.573913 9.46087 60.104348 24.486957 75.686957 97.391304 82.921739 132.452174z" fill="#2E42D4"></path></g>
+      <svg width="30" height="30" viewBox="0 0 2048 2048" aria-label="DSH Desktop logo">
+  <g transform="translate(49.66 50.13) scale(1.6884702481021228)"><path d="M998.4 141.913043c-26.713043-23.930435-55.652174-44.521739-86.817391-60.660869-36.173913-18.921739-73.46087-32.834783-113.530435-41.182609-34.504348-7.234783-69.565217-11.130435-104.626087-9.460869-42.852174 2.226087-84.034783 10.017391-124.66087 24.486956-35.06087 12.8-68.452174 28.93913-100.173913 49.530435-22.817391 15.026087-45.078261 31.165217-64.556521 50.086956-109.078261 105.73913-220.93913 267.686957-218.156522 428.52174-4.452174 38.956522 7.791304 120.765217 13.913043 144.13913 10.573913 42.852174 25.6 84.034783 48.417392 123.547826 5.008696-15.582609 8.904348-30.052174 14.469565-44.521739 6.678261-18.921739 15.582609-36.730435 25.6-53.982609 25.6-41.73913 61.217391-68.452174 111.860869-72.904348 37.286957-3.33913 72.904348 2.226087 109.078261 8.904348 49.530435 9.46087 98.504348 21.704348 148.591305 27.269566 32.834783 3.895652 65.113043 5.565217 98.504347 3.33913 86.26087-5.565217 161.947826-37.286957 229.843479-88.486957 165.843478-125.773913 161.947826-354.504348 12.243478-488.626087z m-260.452174 421.843479c-27.826087 0-50.086957-23.373913-50.086956-51.756522 0-27.826087 22.817391-51.2 50.643478-50.643478 28.382609 0 51.2 22.817391 51.756522 51.2 0 28.93913-22.817391 51.756522-52.313044 51.2z" fill="#7C93FF"></path><path d="M370.086957 455.234783c-37.286957-21.147826-79.582609-33.391304-125.773914-33.391305-81.808696 0-154.713043 38.956522-200.904347 99.06087 28.93913 22.817391 65.113043 40.626087 106.295652 46.747826 99.06087 15.582609 182.53913-71.791304 220.382609-112.417391z" fill="#5C74F5"></path><path d="M602.156522 885.982609c-30.052174-30.608696-67.895652-53.982609-111.304348-66.226087-78.469565-22.26087-159.165217-5.008696-220.382609 40.069565 21.704348 29.495652 51.756522 56.765217 89.043478 74.017391 91.269565 42.295652 195.33913-18.921739 242.643479-47.860869z" fill="#A9BCFF"></path><path d="M427.965217 1001.182609c-23.373913-1.669565-55.095652-6.678261-80.695652-21.704348-45.634783-27.269565-67.33913-52.313043-76.8-120.208696 23.373913-2.782609 49.530435-1.113043 74.573913 9.46087 60.104348 24.486957 75.686957 97.391304 82.921739 132.452174z" fill="#4B63F0"></path></g>
       </svg>
       <span class="brand-label">DSH Desktop</span>
-      </span>
-      </span>
     </div>
     <div class="spinner"></div>
     <div class="hint">Loading plugins…</div>

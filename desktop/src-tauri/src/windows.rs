@@ -185,9 +185,10 @@ fn window_icon() -> tauri::image::Image<'static> {
 /// Splash shown while the sidecar boots dsh AND while the WebUI's own boot
 /// chain settles inside the hidden main window. Branding uses the DSH
 /// Desktop identity (dark): the DSH icon (inline SVG from
-/// assets/icon-source.svg) + raised "DSH Desktop" pill on the card's dark
-/// background — see pages/splash.html for the exact tokens and the platform
-/// split (Windows shadow off, macOS native shadow).
+/// assets/icon-source.svg, fills lifted for the dark card) + "DSH Desktop"
+/// wordmark in soft periwinkle white, directly on the card's deep indigo
+/// background with no white plate — see pages/splash.html for the exact
+/// tokens and the platform split (Windows shadow off, macOS native shadow).
 ///
 /// Created hidden and shown on page-load-Finished: a visible window before the
 /// webview paints shows the default white background for a frame (the
