@@ -56,11 +56,6 @@
   .engine-status .mini-btn:hover { background:var(--btn-hover); }
   .engine-status .mini-btn.ghost { background:var(--chip-bg); color:var(--fg); }
   .engine-status .mini-btn.ghost:hover { background:var(--border); }
-  /* "Check for updates" next to the engine version becomes a small button. */
-  #lnk-engine-check { display:inline-block; margin-left:10px; padding:3px 12px;
-          border-radius:6px; background:var(--btn); color:var(--btn-text);
-          font-size:12px; font-weight:600; text-decoration:none; }
-  #lnk-engine-check:hover { background:var(--btn-hover); }
   .footer { display:flex; gap:10px; padding:14px 22px 18px;
             border-top:1px solid var(--border); }
   button { flex:1; padding:8px 10px; border:none; border-radius:8px;
@@ -69,6 +64,15 @@
   button:hover { background:var(--btn-hover); }
   button.secondary { background:var(--chip-bg); color:var(--fg); }
   button.secondary:hover { background:var(--border); }
+  #remote-list { display:flex; flex-direction:column; gap:6px; margin-top:2px; }
+  .remote-item { display:flex; align-items:center; gap:8px; }
+  .remote-url { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+                font-size:12px; word-break:break-all; }
+  .remote-copy { flex:none; margin:0; padding:2px 10px; border-radius:6px;
+                 background:var(--chip-bg); color:var(--fg); font-size:11px;
+                 font-weight:600; border:none; cursor:pointer; }
+  .remote-copy:hover { background:var(--border); }
+  .remote-hint { display:block; font-size:11px; color:var(--muted); margin-top:4px; }
 </style></head><body>
 <div class="header">
   <img id="app-icon" class="logo" alt="" style="display:none">
@@ -106,7 +110,6 @@
     <span class="label" id="lbl-engine"></span>
     <span class="value">
       <span id="val-engine"></span>
-      <a id="lnk-engine-check" href="#" style="font-size:12px"></a>
     </span>
   </div>
   <div class="row">
@@ -117,9 +120,15 @@
     <span class="label" id="lbl-engine-status"></span>
     <span class="value engine-status" id="engine-status-value"></span>
   </div>
+  <div class="row" id="remote-access-row" style="display:none">
+    <span class="label" id="lbl-remote"></span>
+    <span class="value">
+      <span id="remote-list"></span>
+      <span class="remote-hint" id="remote-hint"></span>
+    </span>
+  </div>
 </div>
 <div class="footer">
-  <button class="secondary" id="btn-open-logs"></button>
   <button class="secondary" id="btn-close"></button>
   <button id="btn-check"></button>
 </div>
@@ -176,7 +185,6 @@
     }
 
     document.getElementById('btn-check').textContent = L.checkUpdates || 'Check for Updates';
-    document.getElementById('btn-open-logs').textContent = L.openLogs || 'Open Log Folder';
     document.getElementById('btn-close').textContent = L.close || 'Close';
 
     document.getElementById('btn-check').onclick = function () {
@@ -347,17 +355,19 @@
       engShow(lines, 0);
     }
 
-    var engineCheckEl = document.getElementById('lnk-engine-check');
-    engineCheckEl.textContent = L.checkEngineUpdates || 'Check for updates';
-    engineCheckEl.onclick = function (e) {
-      e.preventDefault();
+    // "Check DeepSeek Harness updates" moved to the tray (更多 menu); this is
+    // its shared handler. The tray triggers it via runOnLoad (fresh open) or a
+    // window event (when About is already open).
+    function checkEngineNow() {
       var port = a.sidecarPort;
       if (!port) return;
       postEngine('check');
       // Show the checking state immediately, then poll the sidecar.
       engShow([engEsc(L.engineChecking || 'Checking for updates…')], 0);
       engPollStart();
-    };
+    }
+    window.addEventListener('dshd-check-engine', function () { checkEngineNow(); });
+    if (a.runOnLoad === 'checkEngine') checkEngineNow();
 
     (function refreshEngineStatus() {
       var port = a.sidecarPort;
@@ -383,11 +393,6 @@
         })
         .catch(function () { /* keep compile-time values */ });
     })();
-    document.getElementById('btn-open-logs').onclick = function () {
-      if (a.ctlPort) {
-        post('http://127.0.0.1:' + a.ctlPort + '/open-log-dir', a.ctlToken);
-      }
-    };
     document.getElementById('btn-close').onclick = function () {
       if (a.ctlPort) {
         post('http://127.0.0.1:' + a.ctlPort + '/close-window', a.ctlToken,
@@ -396,6 +401,60 @@
         window.close();
       }
     };
+
+    // Remote access (LAN / Tailscale) — mirror OhMyAgent's connection settings:
+    // list one `?token=` launch URL per reachable LAN address so another device
+    // can open the Web UI. The token comes from the sidecar (same source the
+    // engine-status uses); for pre-token engines the URLs are listed plain.
+    (function loadRemoteAccess() {
+      var port = a.sidecarPort;
+      if (!port) return;
+      fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
+            encodeURIComponent(a.sidecarToken || ''))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (info) {
+          if (!info || !info.addresses || !info.addresses.length) return;
+          set('lbl-remote', L.remoteAccessLabel || 'Remote Access');
+          var list = document.getElementById('remote-list');
+          list.textContent = '';
+          info.addresses.forEach(function (addr) {
+            var url = 'http://' + addr + ':' + info.port + '/' +
+              (info.token ? ('?token=' + encodeURIComponent(info.token)) : '');
+            var item = document.createElement('div');
+            item.className = 'remote-item';
+            var u = document.createElement('span');
+            u.className = 'remote-url';
+            u.textContent = url;
+            var btn = document.createElement('button');
+            btn.className = 'remote-copy';
+            btn.type = 'button';
+            btn.textContent = L.copy || 'Copy';
+            btn.onclick = function () {
+              var done = function () {
+                btn.textContent = L.copied || 'Copied';
+                setTimeout(function () { btn.textContent = L.copy || 'Copy'; }, 1500);
+              };
+              var fallback = function () {
+                var ta = document.createElement('textarea');
+                ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta); done();
+              };
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(done, fallback);
+              } else { fallback(); }
+            };
+            item.appendChild(u);
+            item.appendChild(btn);
+            list.appendChild(item);
+          });
+          set('remote-hint', L.remoteAccessHint ||
+            'Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI.');
+          document.getElementById('remote-access-row').style.display = '';
+        })
+        .catch(function () {});
+    })();
   })();
 </script>
 </body></html>

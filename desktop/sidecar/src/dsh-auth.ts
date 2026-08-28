@@ -17,6 +17,8 @@
  * the 303 plants the cookie in the WebView's jar.
  */
 
+import os from 'node:os';
+
 let current: { launchUrl: string; cookie: string } | null = null;
 
 export function getDshAuth(): { launchUrl: string; cookie: string } | null {
@@ -153,6 +155,47 @@ export async function dshHealthProbe(port: number): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * LAN/Tailscale reachability info for the WebUI remote-access panel. Mirrors
+ * OhMyAgent's `/_desktop/webui-token`: enumerate **every** non-internal IPv4 so
+ * a device on any interface (e.g. a 192.168.x.x WiFi and the Tailscale
+ * 100.x.x.x adapter) can open its own `?token=` launch URL. The launch token
+ * is per-process (regenerated on dsh restart) but host-independent, so the same
+ * token mints a cookie bound to whichever authority the remote browser uses.
+ *
+ * @returns token (bare 43-char value) when a token-gated engine is active,
+ *   `null` for pre-token engines (remote URLs are then served without token),
+ *   plus the server port and all reachable LAN addresses.
+ */
+export function getDshLanInfo(): {
+  token: string | null;
+  port: number;
+  addresses: string[];
+} {
+  const token = current?.launchUrl
+    ? (() => {
+        try {
+          return new URL(current.launchUrl).searchParams.get('token');
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const port = Number(process.env.DSHD_PORT ?? 3080);
+  const addresses: string[] = [];
+  for (const nets of Object.values(os.networkInterfaces())) {
+    for (const net of nets ?? []) {
+      // IPv4 + non-internal only. The Tailscale adapter reports its 100.x.x.x
+      // CGNAT address as a plain non-internal IPv4, so it is captured here too.
+      const family = (net as { family?: string | number }).family;
+      if ((family === 'IPv4' || family === 4) && !net.internal) {
+        addresses.push(net.address);
+      }
+    }
+  }
+  return { token, port, addresses };
 }
 
 /**

@@ -587,6 +587,18 @@ pub fn show_plugins_window(app: &AppHandle) -> tauri::Result<()> {
 /// initialization script as JSON and is rendered with textContent (no HTML
 /// injection surface).
 pub fn show_about_window(app: &AppHandle) -> tauri::Result<()> {
+    show_about_window_run(app, None)
+}
+
+/// Open (or focus) the About window. When `run_on_load` is `Some`, the value
+/// is handed to the page so it can run an action right after load (e.g. the
+/// tray's "Check DeepSeek Harness updates" item — that action lives in the
+/// tray 更多 menu, so About itself triggers it via runOnLoad on a fresh open).
+///
+/// Note: when About is already open, `show_about_window` early-returns without
+/// re-running the page script, so the tray emits a window event instead (see
+/// `tray.rs`).
+pub fn show_about_window_run(app: &AppHandle, run_on_load: Option<&str>) -> tauri::Result<()> {
     if let Some(win) = app.get_webview_window(ABOUT_LABEL) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -621,6 +633,14 @@ pub fn show_about_window(app: &AppHandle) -> tauri::Result<()> {
         "engineCheckAgain": tr("重新检查", "Check Again", zh),
         "openLogs": tr("打开日志目录", "Open Log Folder", zh),
         "close": tr("关闭", "Close", zh),
+        "remoteAccessLabel": tr("远程访问", "Remote Access", zh),
+        "remoteAccessHint": tr(
+          "在另一台处于同一局域网 / Tailscale 的设备浏览器中打开以下任一地址即可访问 Web UI（每个地址对应一张独立的会话 Cookie）。",
+          "Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI (each address carries its own session cookie).",
+          zh,
+        ),
+        "copy": tr("复制", "Copy", zh),
+        "copied": tr("已复制", "Copied", zh),
         "dshRepo": "https://github.com/deepseek-ai/deepseek-harness",
     });
     let ref_ = dsh_ref();
@@ -648,6 +668,7 @@ pub fn show_about_window(app: &AppHandle) -> tauri::Result<()> {
         "ctlToken": crate::ctl_server::token().unwrap_or_default(),
         "sidecarPort": state.sidecar_api_port.load(std::sync::atomic::Ordering::SeqCst),
         "sidecarToken": state.ctl_token.clone(),
+        "runOnLoad": run_on_load,
         "dark": dark,
         "labels": labels,
     });

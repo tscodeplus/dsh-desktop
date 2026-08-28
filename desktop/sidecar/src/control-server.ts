@@ -379,6 +379,24 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ControlSe
       return;
     }
 
+    if (path === '/_desktop/dsh-lan' && method === 'GET') {
+      // Remote-access reachability for the WebUI (mirrors OhMyAgent's
+      // /_desktop/webui-token): the dsh launch token + server port + every
+      // non-internal LAN IPv4 so a device on any interface (WiFi 192.168.x.x,
+      // Tailscale 100.x.x.x, ...) can open its own `?token=` launch URL.
+      try {
+        const { getDshLanInfo } = await import('./dsh-auth.js');
+        json(res, 200, getDshLanInfo());
+      } catch {
+        json(res, 200, {
+          token: null,
+          port: Number(process.env.DSHD_PORT ?? 3080),
+          addresses: [],
+        });
+      }
+      return;
+    }
+
     if (path === '/_desktop/shutdown' && method === 'POST') {
       // Graceful stop: bootstrap().stop() closes channels/cron/WS/HTTP/db.
       // If stop() hangs (server.close() waiting on a lingering connection),

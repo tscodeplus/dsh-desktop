@@ -6,9 +6,9 @@
 //! event, so state is only as fresh as the last rebuild — 1s config poll keeps
 //! it close enough for checkboxes and the status label.
 
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::config::{config_path, DesktopConfig};
 use crate::i18n::{is_zh_cfg, tr};
@@ -23,6 +23,9 @@ const ID_AUTO_START: &str = "auto-start";
 const ID_CLOSE_TO_TRAY: &str = "close-to-tray";
 const ID_RESTART_APP: &str = "restart-app";
 const ID_ABOUT: &str = "about";
+const ID_OPEN_LOG: &str = "open-log-dir";
+const ID_WEB_ACCESS: &str = "web-access";
+const ID_CHECK_ENGINE: &str = "check-engine";
 const ID_QUIT: &str = "quit";
 
 /// Create the tray icon with its initial menu.
@@ -110,15 +113,6 @@ fn build_menu(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<Menu<tauri:
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
-    let open_data = MenuItem::with_id(
-        app,
-        ID_OPEN_DATA,
-        tr("打开数据目录", "Open Data Folder", zh),
-        true,
-        None::<&str>,
-    )?;
-    menu.append(&open_data)?;
-
     let plugins = MenuItem::with_id(
         app,
         ID_PLUGINS,
@@ -127,6 +121,42 @@ fn build_menu(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<Menu<tauri:
         None::<&str>,
     )?;
     menu.append(&plugins)?;
+
+    // "更多" submenu: housekeeping + remote/engine actions that don't need a
+    // permanent top-level slot. The engine update check was moved out of the
+    // About window into here (per the About-window cleanup).
+    let open_data = MenuItem::with_id(
+        app,
+        ID_OPEN_DATA,
+        tr("打开数据目录", "Open Data Folder", zh),
+        true,
+        None::<&str>,
+    )?;
+    let open_log = MenuItem::with_id(
+        app,
+        ID_OPEN_LOG,
+        tr("打开日志目录", "Open Log Folder", zh),
+        true,
+        None::<&str>,
+    )?;
+    let web_access = MenuItem::with_id(
+        app,
+        ID_WEB_ACCESS,
+        tr("Web 端访问", "Web Access", zh),
+        true,
+        None::<&str>,
+    )?;
+    let check_engine = MenuItem::with_id(
+        app,
+        ID_CHECK_ENGINE,
+        tr("检查 DeepSeek Harness 更新", "Check DeepSeek Harness Updates", zh),
+        true,
+        None::<&str>,
+    )?;
+    let about = MenuItem::with_id(app, ID_ABOUT, tr("关于", "About", zh), true, None::<&str>)?;
+    let more = Submenu::with_id(app, "more", tr("更多", "More", zh), true)?;
+    more.append_items(&[&open_data, &open_log, &web_access, &check_engine, &about])?;
+    menu.append(&more)?;
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
@@ -141,11 +171,6 @@ fn build_menu(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<Menu<tauri:
 
     let quit = MenuItem::with_id(app, ID_QUIT, tr("退出", "Quit", zh), true, None::<&str>)?;
     menu.append(&quit)?;
-
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-
-    let about = MenuItem::with_id(app, ID_ABOUT, tr("关于", "About", zh), true, None::<&str>)?;
-    menu.append(&about)?;
 
     Ok(menu)
 }
@@ -207,6 +232,31 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         ID_RESTART_APP => restart_app(app),
         ID_ABOUT => {
             if let Err(e) = crate::windows::show_about_window(app) {
+                log::error!("tray: show_about_window failed: {e}");
+            }
+        }
+        ID_OPEN_LOG => {
+            // Mirror the former About-window "Open Log Folder" action.
+            let log_dir = crate::config::ShellConfig::load(app).log_dir;
+            open_path(app, &log_dir);
+        }
+        ID_WEB_ACCESS => {
+            // Open the Web UI in the default browser. Loopback token URL so
+            // BrowserAuth is satisfied without manual token entry.
+            let url = crate::windows::webui_url(app, true);
+            let _ = tauri_plugin_opener::OpenerExt::opener(app)
+                .open_url(url, None::<&str>);
+        }
+        ID_CHECK_ENGINE => {
+            // Engine update check moved out of the About window into the tray.
+            // If About is already open, emit to its live listener; otherwise
+            // open it with runOnLoad so it checks on load (show_about_window
+            // early-returns without re-running init when already open).
+            if app.get_webview_window(crate::windows::ABOUT_LABEL).is_some() {
+                let _ = app.emit_to(crate::windows::ABOUT_LABEL, "dshd-check-engine", ());
+            } else if let Err(e) =
+                crate::windows::show_about_window_run(app, Some("checkEngine"))
+            {
                 log::error!("tray: show_about_window failed: {e}");
             }
         }
