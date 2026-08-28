@@ -244,11 +244,12 @@
         return '<div class="line">' + p + '</div>';
       }).join('');
       engRow.style.display = '';
+      // Always clear any prior auto-hide timer first, so repeated renders
+      // (driven by the 1s poll) don't stack timers that toggle the row
+      // visible/hidden — that stacking is what made "Up to date" flicker.
+      if (engHideTimer) { clearTimeout(engHideTimer); engHideTimer = null; }
       if (hideAfterMs) {
         engHideTimer = setTimeout(function () { engRow.style.display = 'none'; }, hideAfterMs);
-      } else if (engHideTimer) {
-        clearTimeout(engHideTimer);
-        engHideTimer = null;
       }
     }
     function engHide() {
@@ -340,6 +341,11 @@
                    engLink(L.engineCheckAgain || 'Check Again', 'eng-recheck', 'ghost'));
       } else if (check.state === 'done' && check.result === 'uptodate') {
         lines.push(engEsc(L.engineUpToDate || 'Up to date'));
+        // The check is finished — stop polling so the row isn't re-rendered
+        // every second (which flickered the message). It shows for 5s then
+        // auto-hides; a fresh check (footer button or "Check Again") restarts
+        // the poll.
+        engPollStop();
         engShow(lines, 5000);
         return;
       } else if (check.state === 'done' && check.result === 'none') {
