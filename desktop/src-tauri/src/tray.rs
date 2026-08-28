@@ -8,7 +8,7 @@
 
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use crate::config::{config_path, DesktopConfig};
 use crate::i18n::{is_zh_cfg, tr};
@@ -25,7 +25,6 @@ const ID_RESTART_APP: &str = "restart-app";
 const ID_ABOUT: &str = "about";
 const ID_OPEN_LOG: &str = "open-log-dir";
 const ID_WEB_ACCESS: &str = "web-access";
-const ID_CHECK_ENGINE: &str = "check-engine";
 const ID_QUIT: &str = "quit";
 
 /// Create the tray icon with its initial menu.
@@ -122,9 +121,25 @@ fn build_menu(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<Menu<tauri:
     )?;
     menu.append(&plugins)?;
 
-    // "更多" submenu: housekeeping + remote/engine actions that don't need a
-    // permanent top-level slot. The engine update check was moved out of the
-    // About window into here (per the About-window cleanup).
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+
+    let restart_app = MenuItem::with_id(
+        app,
+        ID_RESTART_APP,
+        tr("重启应用", "Restart App", zh),
+        true,
+        None::<&str>,
+    )?;
+    menu.append(&restart_app)?;
+
+    let quit = MenuItem::with_id(app, ID_QUIT, tr("退出", "Quit", zh), true, None::<&str>)?;
+    menu.append(&quit)?;
+
+    // "更多" submenu (housekeeping + Web access), placed below Quit. The engine
+    // update check was moved back into the About window's footer, so it is no
+    // longer here.
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+
     let open_data = MenuItem::with_id(
         app,
         ID_OPEN_DATA,
@@ -146,31 +161,10 @@ fn build_menu(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<Menu<tauri:
         true,
         None::<&str>,
     )?;
-    let check_engine = MenuItem::with_id(
-        app,
-        ID_CHECK_ENGINE,
-        tr("检查 DeepSeek Harness 更新", "Check DeepSeek Harness Updates", zh),
-        true,
-        None::<&str>,
-    )?;
     let about = MenuItem::with_id(app, ID_ABOUT, tr("关于", "About", zh), true, None::<&str>)?;
     let more = Submenu::with_id(app, "more", tr("更多", "More", zh), true)?;
-    more.append_items(&[&open_data, &open_log, &web_access, &check_engine, &about])?;
+    more.append_items(&[&open_data, &open_log, &web_access, &about])?;
     menu.append(&more)?;
-
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-
-    let restart_app = MenuItem::with_id(
-        app,
-        ID_RESTART_APP,
-        tr("重启应用", "Restart App", zh),
-        true,
-        None::<&str>,
-    )?;
-    menu.append(&restart_app)?;
-
-    let quit = MenuItem::with_id(app, ID_QUIT, tr("退出", "Quit", zh), true, None::<&str>)?;
-    menu.append(&quit)?;
 
     Ok(menu)
 }
@@ -241,23 +235,9 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
             open_path(app, &log_dir);
         }
         ID_WEB_ACCESS => {
-            // Open the Web UI in the default browser. Loopback token URL so
-            // BrowserAuth is satisfied without manual token entry.
-            let url = crate::windows::webui_url(app, true);
-            let _ = tauri_plugin_opener::OpenerExt::opener(app)
-                .open_url(url, None::<&str>);
-        }
-        ID_CHECK_ENGINE => {
-            // Engine update check moved out of the About window into the tray.
-            // If About is already open, emit to its live listener; otherwise
-            // open it with runOnLoad so it checks on load (show_about_window
-            // early-returns without re-running init when already open).
-            if app.get_webview_window(crate::windows::ABOUT_LABEL).is_some() {
-                let _ = app.emit_to(crate::windows::ABOUT_LABEL, "dshd-check-engine", ());
-            } else if let Err(e) =
-                crate::windows::show_about_window_run(app, Some("checkEngine"))
-            {
-                log::error!("tray: show_about_window failed: {e}");
+            // Pop up the Web-access window (per-LAN-address ?token= URLs).
+            if let Err(e) = crate::windows::show_web_access_window(app) {
+                log::error!("tray: show_web_access_window failed: {e}");
             }
         }
         ID_QUIT => quit_app(app),

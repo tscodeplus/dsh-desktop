@@ -120,17 +120,11 @@
     <span class="label" id="lbl-engine-status"></span>
     <span class="value engine-status" id="engine-status-value"></span>
   </div>
-  <div class="row" id="remote-access-row" style="display:none">
-    <span class="label" id="lbl-remote"></span>
-    <span class="value">
-      <span id="remote-list"></span>
-      <span class="remote-hint" id="remote-hint"></span>
-    </span>
-  </div>
 </div>
 <div class="footer">
-  <button class="secondary" id="btn-close"></button>
+  <button id="btn-check-engine"></button>
   <button id="btn-check"></button>
+  <button class="secondary" id="btn-close"></button>
 </div>
 <script>
   (function () {
@@ -184,6 +178,7 @@
       });
     }
 
+    document.getElementById('btn-check-engine').textContent = L.checkEngineUpdates || 'Check for DeepSeek Harness Updates';
     document.getElementById('btn-check').textContent = L.checkUpdates || 'Check for Updates';
     document.getElementById('btn-close').textContent = L.close || 'Close';
 
@@ -355,9 +350,7 @@
       engShow(lines, 0);
     }
 
-    // "Check DeepSeek Harness updates" moved to the tray (更多 menu); this is
-    // its shared handler. The tray triggers it via runOnLoad (fresh open) or a
-    // window event (when About is already open).
+    // "Check DeepSeek Harness updates" — now a footer button (left of Close).
     function checkEngineNow() {
       var port = a.sidecarPort;
       if (!port) return;
@@ -366,8 +359,9 @@
       engShow([engEsc(L.engineChecking || 'Checking for updates…')], 0);
       engPollStart();
     }
-    window.addEventListener('dshd-check-engine', function () { checkEngineNow(); });
-    if (a.runOnLoad === 'checkEngine') checkEngineNow();
+    document.getElementById('btn-check-engine').onclick = function () {
+      checkEngineNow();
+    };
 
     (function refreshEngineStatus() {
       var port = a.sidecarPort;
@@ -402,59 +396,6 @@
       }
     };
 
-    // Remote access (LAN / Tailscale) — mirror OhMyAgent's connection settings:
-    // list one `?token=` launch URL per reachable LAN address so another device
-    // can open the Web UI. The token comes from the sidecar (same source the
-    // engine-status uses); for pre-token engines the URLs are listed plain.
-    (function loadRemoteAccess() {
-      var port = a.sidecarPort;
-      if (!port) return;
-      fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
-            encodeURIComponent(a.sidecarToken || ''))
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (info) {
-          if (!info || !info.addresses || !info.addresses.length) return;
-          set('lbl-remote', L.remoteAccessLabel || 'Remote Access');
-          var list = document.getElementById('remote-list');
-          list.textContent = '';
-          info.addresses.forEach(function (addr) {
-            var url = 'http://' + addr + ':' + info.port + '/' +
-              (info.token ? ('?token=' + encodeURIComponent(info.token)) : '');
-            var item = document.createElement('div');
-            item.className = 'remote-item';
-            var u = document.createElement('span');
-            u.className = 'remote-url';
-            u.textContent = url;
-            var btn = document.createElement('button');
-            btn.className = 'remote-copy';
-            btn.type = 'button';
-            btn.textContent = L.copy || 'Copy';
-            btn.onclick = function () {
-              var done = function () {
-                btn.textContent = L.copied || 'Copied';
-                setTimeout(function () { btn.textContent = L.copy || 'Copy'; }, 1500);
-              };
-              var fallback = function () {
-                var ta = document.createElement('textarea');
-                ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-                document.body.appendChild(ta); ta.select();
-                try { document.execCommand('copy'); } catch (e) {}
-                document.body.removeChild(ta); done();
-              };
-              if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(done, fallback);
-              } else { fallback(); }
-            };
-            item.appendChild(u);
-            item.appendChild(btn);
-            list.appendChild(item);
-          });
-          set('remote-hint', L.remoteAccessHint ||
-            'Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI.');
-          document.getElementById('remote-access-row').style.display = '';
-        })
-        .catch(function () {});
-    })();
   })();
 </script>
 </body></html>

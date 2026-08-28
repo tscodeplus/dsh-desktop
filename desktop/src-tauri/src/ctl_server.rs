@@ -206,6 +206,7 @@ fn handle(app: &AppHandle, url: &str, body: &str) -> tiny_http::Response<std::io
         "/pages/splash.html" => html(include_str!("../pages/splash.html")),
         "/pages/error.html" => html(include_str!("../pages/error.html")),
         "/pages/about.html" => html(include_str!("../pages/about.html")),
+        "/pages/web-access.html" => html(include_str!("../pages/web-access.html")),
         "/_desktop/boot-settled" => {
             // The WebUI's boot chain settled (or failed loudly) inside the
             // hidden main window — swap splash → real UI now, so the user
