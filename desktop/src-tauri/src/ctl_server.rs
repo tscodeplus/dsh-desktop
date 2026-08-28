@@ -229,6 +229,34 @@ fn handle(app: &AppHandle, url: &str, body: &str) -> tiny_http::Response<std::io
             }
             ok("pong")
         }
+        "/dsh-auth" => {
+            // Sidecar pushes the DSH launch token + cookie after parsing
+            // `dsh web: http://...?token=` and doing the 303 exchange.
+            if let Ok(auth) = serde_json::from_str::<crate::sidecar::DshAuthInfo>(body) {
+                if !auth.cookie.is_empty() {
+                    if let Some(state) = app.try_state::<Arc<SidecarState>>() {
+                        let needs_reload = state
+                            .dsh_auth
+                            .try_read()
+                            .map(|g| g.is_none())
+                            .unwrap_or(false);
+                        if let Ok(mut guard) = state.dsh_auth.try_write() {
+                            *guard = Some(auth);
+                        }
+                        // First auth for this shell lifetime: the main window
+                        // may already have navigated to the bare URL (401).
+                        // Flag a reload once the health probe confirms the
+                        // new engine is ready — health_loop handles it.
+                        if needs_reload {
+                            state
+                                .reload_main_on_recover
+                                .store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    }
+                }
+            }
+            ok("ok")
+        }
         "/update-install" => {
             match serde_json::from_str::<UpdateInstallBody>(body) {
                 Ok(b) => {

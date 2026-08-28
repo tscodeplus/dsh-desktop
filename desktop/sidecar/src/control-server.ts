@@ -369,6 +369,16 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ControlSe
       return;
     }
 
+    if (path === '/_desktop/dsh-auth' && method === 'GET') {
+      try {
+        const { getDshAuth } = await import('./dsh-auth.js');
+        json(res, 200, getDshAuth() ?? {});
+      } catch {
+        json(res, 200, {});
+      }
+      return;
+    }
+
     if (path === '/_desktop/shutdown' && method === 'POST') {
       // Graceful stop: bootstrap().stop() closes channels/cron/WS/HTTP/db.
       // If stop() hangs (server.close() waiting on a lingering connection),

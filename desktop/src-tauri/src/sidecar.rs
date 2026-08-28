@@ -60,6 +60,13 @@ pub struct SidecarStatus {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct DshAuthInfo {
+    #[serde(rename = "launchUrl")]
+    pub launch_url: String,
+    pub cookie: String,
+}
+
 /// Shared, thread-safe shell-side state about the sidecar process.
 pub struct SidecarState {
     pub status: RwLock<SidecarStatus>,
@@ -86,6 +93,10 @@ pub struct SidecarState {
     /// so a restart (e.g. the plugin window's restart-after-install) would
     /// otherwise leave the user staring at the stale UI.
     pub reload_main_on_recover: std::sync::atomic::AtomicBool,
+    /// DSH web authentication (0.1.2-alpha.1+): the launch token URL and the
+    /// `dsh-auth-xxx` cookie derived from it. Pushed by the sidecar via
+    /// POST /dsh-auth; used for the health probe and for the WebView URL.
+    pub dsh_auth: RwLock<Option<DshAuthInfo>>,
 }
 
 impl SidecarState {
@@ -203,6 +214,7 @@ pub async fn init(app: &AppHandle) {
         generation: std::sync::atomic::AtomicU32::new(1),
         starting_at: std::sync::atomic::AtomicU64::new(unix_millis()),
         reload_main_on_recover: std::sync::atomic::AtomicBool::new(false),
+        dsh_auth: RwLock::new(None),
     });
     app.manage(state.clone());
 
@@ -539,6 +551,73 @@ async fn forward_output<R: AsyncRead + Unpin + Send + 'static>(
     }
 }
 
+/// Fetch the DSH cookie from the sidecar control API (race fallback when the
+/// push via POST /dsh-auth has not yet arrived). Returns `Some(cookie)` if the
+/// sidecar reports a token-bearing launch URL.
+async fn fetch_dsh_cookie_from_sidecar(
+    client: &reqwest::Client,
+    state: &SidecarState,
+) -> Option<String> {
+    let port = state.sidecar_api_port.load(std::sync::atomic::Ordering::SeqCst);
+    if port == 0 {
+        return None;
+    }
+    let url = format!(
+        "http://127.0.0.1:{port}/_desktop/dsh-auth?token={}",
+        state.ctl_token
+    );
+    let resp = client.get(&url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let body: serde_json::Value = resp.json().await.ok()?;
+    let cookie = body.get("cookie")?.as_str()?;
+    if cookie.is_empty() {
+        return None;
+    }
+    // Cache it so subsequent probes don't re-fetch
+    let launch_url = body.get("launchUrl")?.as_str().unwrap_or("").to_string();
+    if !launch_url.is_empty() {
+        let mut guard = state.dsh_auth.try_write().ok()?;
+        *guard = Some(DshAuthInfo {
+            launch_url,
+            cookie: cookie.to_string(),
+        });
+    }
+    Some(cookie.to_string())
+}
+
+async fn probe_dsh(client: &reqwest::Client, url: &str, state: &SidecarState) -> bool {
+    // 1. Cached cookie (pushed via POST /dsh-auth or cached from fetch)
+    if let Ok(guard) = state.dsh_auth.try_read() {
+        if let Some(auth) = guard.as_ref() {
+            if !auth.cookie.is_empty() {
+                if let Ok(resp) = client.get(url).header("Cookie", &auth.cookie).send().await {
+                    if resp.status().is_success() {
+                        return true;
+                    }
+                }
+                // Cookie present but probe failed — fall through to refresh/fallback
+            }
+        }
+    }
+    // 2. Try to fetch/refresh from the sidecar (covers the race)
+    if let Some(cookie) = fetch_dsh_cookie_from_sidecar(client, state).await {
+        if let Ok(resp) = client.get(url).header("Cookie", cookie).send().await {
+            if resp.status().is_success() {
+                return true;
+            }
+        }
+    }
+    // 3. Plain probe — works for old engines (0.1.1-rc.2) without auth
+    client
+        .get(url)
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
 /// Endless health loop: drives the Starting → Running / Error state machine and
 /// reveals the main window once the gateway answers.
 async fn health_loop(app: AppHandle, state: Arc<SidecarState>, server_port: u16) {
@@ -554,12 +633,7 @@ async fn health_loop(app: AppHandle, state: Arc<SidecarState>, server_port: u16)
     let mut consecutive_failures: u32 = 0;
 
     loop {
-        let healthy = client
-            .get(&url)
-            .send()
-            .await
-            .map(|r| r.status().is_success())
-            .unwrap_or(false);
+        let healthy = probe_dsh(&client, &url, &state).await;
         let snapshot = state.snapshot().await;
 
         match snapshot.kind {
@@ -585,7 +659,14 @@ async fn health_loop(app: AppHandle, state: Arc<SidecarState>, server_port: u16)
                     {
                         if let Some(win) = app.get_webview_window(crate::windows::MAIN_LABEL) {
                             if win.is_visible().unwrap_or(false) {
-                                let _ = win.reload();
+                                // Navigate to the fresh WebUI URL. For a
+                                // 0.1.2+ (token-gated) engine this now carries
+                                // `?token=`, so the WebView does the 303 and
+                                // plants the auth cookie. A bare `reload()`
+                                // would repeat the OLD url and — post-swap —
+                                // land on dsh's 401 page.
+                                let target = crate::windows::webui_url(&app, true);
+                                let _ = win.navigate(target.parse().expect("webui url"));
                             }
                         }
                         // The plugin-manager window pins the sidecar control

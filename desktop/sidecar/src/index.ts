@@ -22,6 +22,7 @@ import {
   ensureDataDirs,
   startHeartbeat,
 } from './control-server.js';
+import { clearDshAuth, handleDshOutputLine } from './dsh-auth.js';
 import {
   applyPendingEngineStaging,
   getEngineUpdater,
@@ -104,14 +105,30 @@ function watchDsh(child: ChildProcess, noOpen: boolean): ChildProcess {
   return child;
 }
 
+/** Pipe dsh output line-by-line to capture the launch token (0.1.2-alpha.1+). */
+function attachDshOutput(child: ChildProcess): void {
+  const onChunk = (chunk: Buffer | string): void => {
+    const text = String(chunk);
+    // Forward to parent stdout/stderr so Rust's sidecar.log still captures it
+    process.stdout.write(text);
+    for (const line of text.split('\n')) {
+      void handleDshOutputLine(line);
+    }
+  };
+  child.stdout?.on('data', onChunk);
+  child.stderr?.on('data', onChunk);
+}
+
 /** Spawn the prod CLI bundle (`apps/cli/lib/bin.js`) with the given args. */
 function spawnDshWeb(webArgs: string[]): ChildProcess {
   const entry = join(dshRoot, 'apps', 'cli', 'lib', 'bin.js');
-  return spawn(process.execPath, [entry, ...webArgs], {
+  const child = spawn(process.execPath, [entry, ...webArgs], {
     cwd: dshRoot,
     env: dshEnv(),
-    stdio: ['ignore', 'inherit', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  attachDshOutput(child);
+  return child;
 }
 
 function spawnDsh(): ChildProcess {
@@ -130,15 +147,16 @@ function spawnDsh(): ChildProcess {
   console.log(`[sidecar] starting dsh web (dev=${isDev}, root=${dshRoot})`);
   if (isDev) {
     // Dev: run exactly like upstream `pnpm dsh web` (tsx loader, src entry).
-    return watchDsh(
-      spawn('pnpm', ['dsh', 'web'], {
+    {
+      const child = spawn('pnpm', ['dsh', 'web'], {
         cwd: dshRoot,
         shell: process.platform === 'win32',
         env: dshEnv(),
-        stdio: ['ignore', 'inherit', 'inherit'],
-      }),
-      false,
-    );
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      attachDshOutput(child);
+      return watchDsh(child, false);
+    }
   }
   // Prod: the built CLI bundle (tsdown output) runs on the bundled Node.
   // Since rc8, `dsh web` opens the default browser once the server is ready
@@ -162,6 +180,7 @@ export async function stopDshChild(reason: string): Promise<void> {
   const child = dshChild;
   if (!child || child.killed) return;
   console.log(`[sidecar] stopping dsh (${reason})`);
+  clearDshAuth();
   child.kill('SIGTERM');
   // Give dsh a moment to flush; hard-kill on timeout (the child may have
   // spawned workers holding the ports / files to be swapped).

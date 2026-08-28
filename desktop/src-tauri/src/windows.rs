@@ -62,8 +62,33 @@ fn shell_page_url(page: &str) -> WebviewUrl {
 /// WebUI URL for the main window. dsh is local-only, so this is always the
 /// loopback web server. `cache_bust` appends a `_ts` query param so a
 /// navigate after config changes isn't served from the webview cache.
+///
+/// Since DeepSeek Harness 0.1.2-alpha.1 the server prints a `?token=` URL and
+/// gates `/` + `/api` behind a `dsh-auth-*` cookie (BrowserAuth). The sidecar
+/// captures the token and cookie and pushes them via POST /dsh-auth; when a
+/// token is present the WebView must load the authenticated URL so the 303
+/// plants the cookie in the WebView's jar. Old engines have no token.
 pub fn webui_url(app: &AppHandle, cache_bust: bool) -> String {
-    // dsh is local-only: always the loopback web server.
+    if let Some(state) = app.try_state::<Arc<SidecarState>>() {
+        if let Ok(guard) = state.dsh_auth.try_read() {
+            if let Some(auth) = guard.as_ref() {
+                if auth.launch_url.contains("token=") {
+                    let base = auth.launch_url.clone();
+                    if cache_bust {
+                        let ts = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0);
+                        let sep = if base.contains('?') { '&' } else { '?' };
+                        return format!("{base}{sep}_ts={ts}");
+                    }
+                    return base;
+                }
+            }
+        }
+    }
+    // Old engine or token not yet captured — plain loopback. The health_loop
+    // will reload the window once the auth arrives (reload_main_on_recover).
     let port = ShellConfig::load(app).server_port;
     let base = format!("http://127.0.0.1:{port}");
     if cache_bust {

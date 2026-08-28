@@ -185,20 +185,28 @@ function isDarkTheme(): boolean {
   return process.env.DSHD_OS_DARK === '1';
 }
 
-/** Poll GET http://127.0.0.1:{port}/ until it answers ok or the deadline hits. */
+/** Poll GET http://127.0.0.1:{port}/ until it answers ok or the deadline hits.
+ *  Uses the DSH launch-token cookie when present (0.1.2-alpha.1+), falls back
+ *  to a plain probe for older engines. */
 async function waitForHealth(timeoutMs: number): Promise<boolean> {
   const port = Number(process.env.DSHD_PORT ?? 3080);
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const r = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2_000) });
-      if (r.ok) return true;
-    } catch {
-      /* not up yet — retry */
+  try {
+    const { waitForDshHealth } = await import('./dsh-auth.js');
+    return await waitForDshHealth(port, timeoutMs);
+  } catch {
+    // Fallback: plain probe if dsh-auth module unavailable
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2_000) });
+        if (r.ok) return true;
+      } catch {
+        /* not up yet — retry */
+      }
+      await new Promise((r) => setTimeout(r, 500));
     }
-    await new Promise((r) => setTimeout(r, 500));
+    return false;
   }
-  return false;
 }
 
 // ---------------------------------------------------------------------------
