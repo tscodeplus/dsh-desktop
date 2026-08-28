@@ -656,7 +656,7 @@ pub fn show_about_window(app: &AppHandle) -> tauri::Result<()> {
     let init = format!("window.__DSHD_ABOUT__ = {};", payload);
     WebviewWindowBuilder::new(app, ABOUT_LABEL, shell_page_url("about.html"))
         .title(tr("关于", "About", zh))
-        .inner_size(440.0, 420.0)
+        .inner_size(440.0, 320.0)
         .resizable(false)
         .decorations(false)
         .background_color(tauri::window::Color::from(if dark { (20, 20, 31) } else { (250, 250, 252) }))

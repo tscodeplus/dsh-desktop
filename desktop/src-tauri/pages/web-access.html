@@ -93,11 +93,14 @@
     cursor: pointer;
   }
   .remote-copy:hover { background: var(--border); }
+  /* Top hint, directly under the title — a touch more prominent than body
+     copy, but deliberately not bold or loud. */
   .remote-hint {
-    color: var(--muted);
-    font-size: 11px;
-    margin-top: 6px;
-    line-height: 1.6;
+    color: var(--fg);
+    opacity: 0.75;
+    font-size: 12px;
+    margin-bottom: 14px;
+    line-height: 1.7;
   }
   .empty {
     color: var(--muted);
@@ -129,8 +132,8 @@
 <body>
   <div class="header" id="hdr"></div>
   <div class="body">
-    <div id="remote-list"></div>
     <div class="remote-hint" id="remote-hint"></div>
+    <div id="remote-list"></div>
   </div>
   <div class="footer">
     <button class="secondary" id="btn-close"></button>
@@ -155,6 +158,8 @@
     }
     if (a.dark) document.body.setAttribute('data-theme', 'dark');
     set('hdr', L.title || 'Web Access');
+    set('remote-hint', L.remoteAccessHint ||
+      'Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI.');
     set('btn-close', L.close || 'Close');
 
     document.getElementById('btn-close').onclick = function () {
@@ -176,8 +181,6 @@
           encodeURIComponent(a.sidecarToken || ''))
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (info) {
-        set('remote-hint', L.remoteAccessHint ||
-          'Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI.');
         if (!info || !info.addresses || !info.addresses.length) {
           var empty = document.createElement('div');
           empty.className = 'empty';
