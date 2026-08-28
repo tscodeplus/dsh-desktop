@@ -342,11 +342,12 @@
       } else if (check.state === 'done' && check.result === 'uptodate') {
         lines.push(engEsc(L.engineUpToDate || 'Up to date'));
         // The check is finished — stop polling so the row isn't re-rendered
-        // every second (which flickered the message). It shows for 5s then
-        // auto-hides; a fresh check (footer button or "Check Again") restarts
-        // the poll.
+        // every second (which flickered the message). "Up to date" stays
+        // visible for the rest of the window session (no auto-hide); a fresh
+        // check (footer button or "Check Again") restarts the poll and
+        // re-renders it.
         engPollStop();
-        engShow(lines, 5000);
+        engShow(lines);
         return;
       } else if (check.state === 'done' && check.result === 'none') {
         engHide();
@@ -386,11 +387,15 @@
             commitEl.href = (L.dshRepo || 'https://github.com/deepseek-ai/deepseek-harness') + '/tree/' + cur.ref;
           }
           set('val-engine', upstream || cur.ref.slice(0, 12) || '-');
-          // If an engine operation is in flight (e.g. started from the
-          // startup popup), show the inline status and follow it.
+          // Show the inline engine status on open and refresh it from the
+          // sidecar: if an operation is in flight, follow it via the poll;
+          // otherwise reflect the last completed check (e.g. "Up to date")
+          // so the About window isn't stale. A fresh check re-evaluates it.
           if (s.state !== 'idle') {
             renderEngineStatus(s);
             engPollStart();
+          } else if (s.check && s.check.state === 'done' && s.check.result) {
+            renderEngineStatus(s);
           }
         })
         .catch(function () { /* keep compile-time values */ });
