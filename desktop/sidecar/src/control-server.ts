@@ -254,6 +254,23 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ControlSe
     return;
   }
 
+  // Token-free readiness probe for CI smoke tests. The DSH web root is gated
+  // behind the BrowserAuth ?token= cookie (0.1.2-alpha.1+), so a bare GET /
+  // returns 401 and cannot serve as a liveness check. This endpoint instead
+  // probes the web server with the sidecar's cached session cookie (or plain
+  // for pre-token engines) and reports 200 once it answers 2xx, 503 otherwise.
+  // Left unauthenticated on purpose so a headless smoke test needs no token.
+  if (path === '/_desktop/ready' && method === 'GET') {
+    try {
+      const { dshHealthProbe } = await import('./dsh-auth.js');
+      const ready = await dshHealthProbe(Number(process.env.DSHD_PORT ?? 3080));
+      text(res, ready ? 200 : 503, ready ? 'ready' : 'not ready');
+    } catch {
+      text(res, 503, 'not ready');
+    }
+    return;
+  }
+
   if (!authorize(req, opts)) {
     json(res, 401, { error: 'unauthorized' });
     return;

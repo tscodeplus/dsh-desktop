@@ -271,7 +271,7 @@ jobs:
           rm -rf "$STAGING"
           ls -lh "$DMG"
 
-      - name: Smoke test (launch app, check dsh web on 3080)
+      - name: Smoke test (launch app, check dsh web readiness via sidecar /_desktop/ready)
         if: runner.os == 'macOS'
         run: |
           APP="desktop/src-tauri/target/release/bundle/macos/DSH Desktop.app"
@@ -310,8 +310,13 @@ jobs:
             # First launch initializes DSH_HOME (profiles/storages) and loads
             # cordis plugins; on cold runners this can take well over 2 min.
             for i in $(seq 1 120); do
-              if curl -sf -m 2 -o /dev/null http://127.0.0.1:3080/; then
-                echo "dsh web OK on :3080"
+              # Token-free readiness probe: the web root is gated behind the
+              # BrowserAuth ?token= cookie (0.1.2-alpha.1+), so a bare GET / on
+              # :3080 returns 401. The sidecar exposes /_desktop/ready (control
+              # api on :9291) which probes the server with the session cookie and
+              # returns 200 once it answers 2xx, 503 until then.
+              if curl -sf -m 2 -o /dev/null http://127.0.0.1:9291/_desktop/ready; then
+                echo "dsh web ready (sidecar /_desktop/ready OK on :9291)"
                 kill "$app_pid" 2>/dev/null || true
                 # The shell's exit must take the sidecar + dsh down with it.
                 # On macOS/Linux the cleanup is heartbeat-driven: the sidecar
