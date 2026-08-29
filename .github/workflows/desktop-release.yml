@@ -307,16 +307,22 @@ jobs:
               dump_diagnostics
               return 1
             fi
+            # The sidecar control api (serving the token-free /_desktop/ready
+            # readiness probe) listens on a DYNAMIC ephemeral port in the bundle:
+            # the Rust shell seeds DSHD_SIDECAR_CONTROL_PORT=0 and the OS assigns
+            # one, which the sidecar logs as "control api :<port>". Discover it
+            # from the sidecar log. The web root itself is gated behind the
+            # BrowserAuth ?token= cookie (0.1.2-alpha.1+), so a bare GET / on
+            # :3080 returns 401 and cannot serve as a liveness check.
+            local ctl_port=""
             # First launch initializes DSH_HOME (profiles/storages) and loads
             # cordis plugins; on cold runners this can take well over 2 min.
             for i in $(seq 1 120); do
-              # Token-free readiness probe: the web root is gated behind the
-              # BrowserAuth ?token= cookie (0.1.2-alpha.1+), so a bare GET / on
-              # :3080 returns 401. The sidecar exposes /_desktop/ready (control
-              # api on :9291) which probes the server with the session cookie and
-              # returns 200 once it answers 2xx, 503 until then.
-              if curl -sf -m 2 -o /dev/null http://127.0.0.1:9291/_desktop/ready; then
-                echo "dsh web ready (sidecar /_desktop/ready OK on :9291)"
+              if [ -z "$ctl_port" ]; then
+                ctl_port=$(grep -hoE 'control api :[0-9]+' /tmp/dsh-smoke.log "$LOG_DIR/sidecar.log" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+              fi
+              if [ -n "$ctl_port" ] && curl -sf -m 2 -o /dev/null "http://127.0.0.1:${ctl_port}/_desktop/ready"; then
+                echo "dsh web ready (sidecar /_desktop/ready OK on :${ctl_port})"
                 kill "$app_pid" 2>/dev/null || true
                 # The shell's exit must take the sidecar + dsh down with it.
                 # On macOS/Linux the cleanup is heartbeat-driven: the sidecar
