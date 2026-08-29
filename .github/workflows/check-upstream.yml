@@ -10,6 +10,13 @@ on:
     # Daily at 02:00 UTC.
     - cron: '0 2 * * *'
   workflow_dispatch:
+  # A bump PR is redundant the moment its ref lands on master (manual bump,
+  # a merge, or another commit). Sweep and close it immediately instead of
+  # waiting up to 24h for the next daily cron. Scoped to dsh-ref.json so a
+  # normal master push doesn't re-run the whole upstream check.
+  push:
+    branches: [master]
+    paths: ['desktop/dsh-ref.json']
 
 permissions:
   contents: write
