@@ -1,7 +1,8 @@
 {
-  "ref": "cd5ef8148158c3a752a658978873241fdf8e2bbc",
-  "tag": "dsh-v0.1.2-alpha.1",
-  "upstreamVersion": "0.1.2-alpha.1",
+  "ref": "0a53fb55bea101816fa226bb964ae2bed71c343b",
+  "tag": "dsh-v0.1.2-alpha.2",
+  "upstreamVersion": "0.1.2-alpha.2",
   "mode": "release",
-  "note": "跟随 DeepSeek Harness 发版 tag dsh-v0.1.2-alpha.1（含 BrowserAuth token 网关，桌面端已支持；v0.5.x 桌面版随附种子引擎）。"
+  "note": "跟随发版 tag dsh-v0.1.2-alpha.2",
+  "updatedBy": "check-upstream"
 }
