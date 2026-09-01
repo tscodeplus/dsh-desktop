@@ -71,17 +71,16 @@ jobs:
             echo "target_ref=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Close superseded bump PRs
-        # Two kinds of open bump PRs are redundant and get swept:
-        # 1. Landed — its ref is already recorded in dsh-ref.json on master
-        #    (the bump landed via a manual commit or a previous merge).
-        # 2. Superseded — this run is about to propose a NEWER ref (target_ref
-        #    non-empty); any other open bump PR follows an older upstream
-        #    state and should not compete with the fresh proposal. Without
-        #    this, intermediate commit-follow PRs lingered open forever once
-        #    a newer tag appeared (e.g. #4 vs the newer tag bump #5).
-        # When target_ref is empty (upstream unchanged vs master), any open
-        # bump PR whose ref is not on master is stale as well.
+      - name: Close redundant bump PRs
+        # By design, upstream updates reach installed apps through the engine
+        # channel (engine-updater swaps the published closure at runtime) —
+        # the desktop app is NOT rebuilt for upstream changes. A bump PR is
+        # therefore redundant as soon as any of these holds:
+        # 1. Landed — its ref is already recorded in dsh-ref.json on master.
+        # 2. Published — the engine closure for its ref is already on the
+        #    engine release (the channel carries the update; nothing to do).
+        # 3. Superseded — this run is about to propose a NEWER ref (target_ref
+        #    non-empty) and the PR follows an older upstream state.
         if: steps.check.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,24 +89,32 @@ jobs:
           set -euo pipefail
           CURRENT="$(node -p "JSON.parse(require('fs').readFileSync('desktop/dsh-ref.json','utf8')).ref.slice(0,12)")"
           TARGET="${TARGET_REF:0:12}"
+          MANIFEST="$(curl -sfL "https://github.com/${GITHUB_REPOSITORY}/releases/download/engine/engine-manifest.json" || true)"
           gh pr list --state open --json number,headRefName \
             --jq '.[] | select(.headRefName | test("^chore/dsh-bump-")) | [.number, .headRefName] | @tsv' |
             while IFS=$'\t' read -r num head; do
               ref="${head#chore/dsh-bump-}"
-              # The fresh proposal this run is about to open/update — keep it.
-              if [ -n "${TARGET}" ] && [ "${ref}" = "${TARGET}" ]; then
-                continue
-              fi
               if [ "${ref}" = "${CURRENT}" ]; then
                 echo "closing PR #${num} — bump for ${ref} is already on master"
                 gh pr close "${num}" --comment \
-                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已包含在 master 的 dsh-ref.json 中，无需合并。上游下次发版时 check-upstream 会重新提出 bump PR。" \
+                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已包含在 master 的 dsh-ref.json 中，无需合并。" \
+                  || true
+              elif [ -n "${MANIFEST}" ] && node -e '
+                const m = JSON.parse(process.argv[1]);
+                const refs = Object.values(m.platforms || {}).map((p) => p.ref);
+                process.exit(refs.some((r) => r.startsWith(process.argv[2])) ? 0 : 1);
+              ' "${MANIFEST}" "${ref}"; then
+                echo "closing PR #${num} — engine closure for ${ref} is already published"
+                gh pr close "${num}" --comment \
+                  "自动化关闭（check-upstream）：ref ${ref} 的引擎闭包已发布到 engine channel，桌面端经 engine-updater 自动换入更新，无需 bump PR（上游更新不重新构建桌面端）。" \
+                  || true
+              elif [ -n "${TARGET}" ] && [ "${ref}" != "${TARGET}" ]; then
+                echo "closing PR #${num} — bump for ${ref} is superseded (target: ${TARGET}, master: ${CURRENT})"
+                gh pr close "${num}" --comment \
+                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已被更新的上游状态取代（目标：${TARGET}）。请以最新的 bump PR 为准。" \
                   || true
               else
-                echo "closing PR #${num} — bump for ${ref} is superseded (target: ${TARGET:-none}, master: ${CURRENT})"
-                gh pr close "${num}" --comment \
-                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已被更新的上游状态取代（目标：${TARGET:-无新提案}）。请以最新的 bump PR 为准。" \
-                  || true
+                echo "keeping PR #${num} — live proposal for ${ref}, closure not yet published"
               fi
             done
 
@@ -121,6 +128,20 @@ jobs:
           NOTE: ${{ steps.check.outputs.note }}
         run: |
           set -euo pipefail
+          # Engine channel first: if the closure for TARGET_REF is already
+          # published, the update reaches installed apps via engine-updater
+          # without rebuilding the desktop app — a bump PR has nothing left
+          # to accomplish, so skip instead of opening a dead-letter PR.
+          MANIFEST="$(curl -sfL "https://github.com/${GITHUB_REPOSITORY}/releases/download/engine/engine-manifest.json" || true)"
+          if [ -n "${MANIFEST}" ] && node -e '
+            const m = JSON.parse(process.argv[1]);
+            const ref = process.argv[2];
+            const refs = Object.values(m.platforms || {}).map((p) => p.ref);
+            process.exit(refs.length > 0 && refs.every((r) => r === ref) ? 0 : 1);
+          ' "${MANIFEST}" "${TARGET_REF}"; then
+            echo "engine closure for ${TARGET_REF} is already published — skipping bump PR"
+            exit 0
+          fi
           BRANCH="chore/dsh-bump-${TARGET_REF:0:12}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

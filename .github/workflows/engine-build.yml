@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 env:
   UPSTREAM_REPO: deepseek-ai/deepseek-harness
@@ -165,7 +166,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: [detect, build]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -218,3 +219,26 @@ jobs:
       - name: Verify the published manifest
         run: |
           curl -sfL "https://github.com/$DESKTOP_REPO/releases/download/$ENGINE_TAG/engine-manifest.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const m=JSON.parse(s);const ok=Object.keys(m.platforms).length===3;console.log('platforms:',Object.keys(m.platforms).join(','));if(!ok)process.exit(1)})"
+      - name: Close bump PRs for the published ref
+        # The engine channel now carries this ref to installed apps via
+        # engine-updater — by design upstream updates do NOT require
+        # rebuilding the desktop app. Any open bump PR for the same ref is
+        # a delivered notification, not a pending change: close it instead
+        # of leaving it open until the next check-upstream sweep.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_REF: ${{ needs.detect.outputs.ref }}
+        run: |
+          set -euo pipefail
+          REF12="${PUBLISHED_REF:0:12}"
+          gh pr list --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | test("^chore/dsh-bump-")) | [.number, .headRefName] | @tsv' |
+            while IFS=$'\t' read -r num head; do
+              ref="${head#chore/dsh-bump-}"
+              if [ "${ref}" = "${REF12}" ]; then
+                echo "closing PR #${num} — engine closure for ${REF12} published"
+                gh pr close "${num}" --comment \
+                  "自动化关闭（engine-build）：ref ${REF12} 的引擎闭包已构建并发布到 engine channel。桌面端经 engine-updater 自动换入更新，无需重新构建桌面端，该 bump PR 无需合并。" \
+                  || true
+              fi
+            done
