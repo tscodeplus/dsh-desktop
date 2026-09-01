@@ -72,24 +72,41 @@ jobs:
           fi
 
       - name: Close superseded bump PRs
-        # A bump PR is redundant once its ref is already recorded in
-        # dsh-ref.json on master (the bump landed via a manual commit or a
-        # previous merge). The bot cannot know that when it opens the PR, so
-        # every run sweeps open bump PRs and closes the ones that are complete.
+        # Two kinds of open bump PRs are redundant and get swept:
+        # 1. Landed — its ref is already recorded in dsh-ref.json on master
+        #    (the bump landed via a manual commit or a previous merge).
+        # 2. Superseded — this run is about to propose a NEWER ref (target_ref
+        #    non-empty); any other open bump PR follows an older upstream
+        #    state and should not compete with the fresh proposal. Without
+        #    this, intermediate commit-follow PRs lingered open forever once
+        #    a newer tag appeared (e.g. #4 vs the newer tag bump #5).
+        # When target_ref is empty (upstream unchanged vs master), any open
+        # bump PR whose ref is not on master is stale as well.
         if: steps.check.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_REF: ${{ steps.check.outputs.target_ref }}
         run: |
           set -euo pipefail
           CURRENT="$(node -p "JSON.parse(require('fs').readFileSync('desktop/dsh-ref.json','utf8')).ref.slice(0,12)")"
+          TARGET="${TARGET_REF:0:12}"
           gh pr list --state open --json number,headRefName \
             --jq '.[] | select(.headRefName | test("^chore/dsh-bump-")) | [.number, .headRefName] | @tsv' |
             while IFS=$'\t' read -r num head; do
               ref="${head#chore/dsh-bump-}"
+              # The fresh proposal this run is about to open/update — keep it.
+              if [ -n "${TARGET}" ] && [ "${ref}" = "${TARGET}" ]; then
+                continue
+              fi
               if [ "${ref}" = "${CURRENT}" ]; then
                 echo "closing PR #${num} — bump for ${ref} is already on master"
                 gh pr close "${num}" --comment \
                   "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已包含在 master 的 dsh-ref.json 中，无需合并。上游下次发版时 check-upstream 会重新提出 bump PR。" \
+                  || true
+              else
+                echo "closing PR #${num} — bump for ${ref} is superseded (target: ${TARGET:-none}, master: ${CURRENT})"
+                gh pr close "${num}" --comment \
+                  "自动化关闭（check-upstream）：该 bump 的 ref（${ref}）已被更新的上游状态取代（目标：${TARGET:-无新提案}）。请以最新的 bump PR 为准。" \
                   || true
               fi
             done
