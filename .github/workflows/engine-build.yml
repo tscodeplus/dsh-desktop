@@ -232,15 +232,19 @@ jobs:
           # tracks engine builds (desktop releases use --latest=false).
           gh release edit "$VREL_ENGINE" --latest
       - name: Publish the engine channel pointer
+        env:
+          PTR_TITLE: DeepSeek Harness Engine (update channel)
+          PTR_NOTES: Engine update channel for the DSH Desktop app — engine-manifest.json only. The desktop sidecar (engine-updater.ts) reads this manifest at a fixed URL to discover the newest engine build; the platform tarballs live on the per-version engine-v<version> release the manifest points at.
         run: |
           set -euo pipefail
           # The fixed-URL release the desktop updater reads. Manifest only —
           # the tarballs live on the versioned release, so refreshing this
           # pointer can never break a download URL.
-          gh release create $ENGINE_TAG \
-            --prerelease --title "DeepSeek Harness Engine (update channel)" \
-            --notes "Engine update channel for the DSH Desktop app — engine-manifest.json only. The desktop sidecar (engine-updater.ts) reads this manifest at a fixed URL to discover the newest engine build; the platform tarballs live on the per-version engine-v<version> release the manifest points at." \
-            --target master || true
+          gh release create $ENGINE_TAG --prerelease --target master \
+            --title "$PTR_TITLE" --notes "$PTR_NOTES" || true
+          # `create` is a no-op once the release exists (first run creates it),
+          # so keep title/notes current explicitly.
+          gh release edit $ENGINE_TAG --prerelease --title "$PTR_TITLE" --notes "$PTR_NOTES"
           gh release upload $ENGINE_TAG desktop/engine-manifest.json --clobber
           # The pointer must never hold tarballs: the manifest above points at
           # the versioned release, and pre-split builds parked their tarballs
