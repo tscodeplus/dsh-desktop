@@ -1,14 +1,22 @@
 # engine-build.yml — build and publish the DeepSeek Harness engine closure
-# (upstream dsh) as release assets under the fixed `engine` prerelease tag.
+# (upstream dsh) to this repo's releases.
 #
-# The desktop app's sidecar (engine-updater.ts) fetches engine-manifest.json
-# from that release and swaps the matching platform tarball in at runtime —
-# upstream releases no longer require a desktop release.
+# Two releases per build:
+#   engine-v<version> (or engine-<sha12> for untagged refs) — the per-version
+#       release: the 3 platform tarballs + that version's engine-manifest.json.
+#       Kept forever (it is the version history) and it is the asset host the
+#       manifest URLs point at. Published as a normal release and marked
+#       "Latest", so the repository homepage release card tracks engine
+#       activity (desktop-release.yml passes --latest=false so a desktop
+#       release does not steal the slot back).
+#   engine — the fixed channel pointer the desktop app's sidecar
+#       (engine-updater.ts) fetches: engine-manifest.json ONLY, whose URLs
+#       point at the versioned release. That URL never changes, so the updater
+#       needs no GitHub API access and no desktop code change.
 #
-# Stateless design: the manifest on the release IS the state. `detect`
-# compares the upstream's latest tag against the already-published manifest;
-# a difference triggers the 3-platform build matrix and an atomic publish
-# (upload --clobber + stale asset cleanup).
+# Stateless design: the pointer's manifest IS the state. `detect` compares the
+# upstream's latest tag against the already-published manifest; a difference
+# triggers the 3-platform build matrix and an atomic publish.
 #
 # Triggered daily (01:13 UTC and 13:13 UTC — Beijing 09:13 / 21:13, off the
 # 02:00 check-upstream cron) and manually via workflow_dispatch (inputs.ref
@@ -182,25 +190,64 @@ jobs:
           find artifacts -name 'dsh-engine-*.tar.gz' -exec cp {} desktop/ \;
           find artifacts -name 'engine-fragment-*.json' -exec cp {} desktop/ \;
           ls -la desktop/dsh-engine-*.tar.gz desktop/engine-fragment-*.json
-      - name: Merge manifest
-        working-directory: desktop
-        run: node scripts/merge-engine-manifest.cjs
-      - name: Publish to the engine release
+      - name: Compute the versioned release tag
+        id: vtag
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          REF: ${{ needs.detect.outputs.ref }}
         run: |
           set -euo pipefail
-          # Create once (fixed prerelease tag); upload with --clobber after.
-          gh release create $ENGINE_TAG \
-            --prerelease --title "DeepSeek Harness Engine" \
-            --notes "Engine closure for the desktop app — published automatically by engine-build.yml. Assets: dsh-engine-<platform>-<sha12>.tar.gz + engine-manifest.json (the desktop sidecar's source of truth)." \
+          # Tagged upstream ref -> engine-v<version>; bare commit -> engine-<sha12>.
+          if [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+            TAG="engine-${REF:0:12}"
+          else
+            TAG="engine-v${VERSION}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "versioned release tag: $TAG"
+      - name: Merge manifest
+        working-directory: desktop
+        env:
+          # URLs must point at the versioned release that carries the tarballs;
+          # the fixed `engine` pointer gets a byte-identical copy of this file.
+          ENGINE_ASSET_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.vtag.outputs.tag }}
+          ENGINE_RELEASE_TAG: ${{ steps.vtag.outputs.tag }}
+        run: node scripts/merge-engine-manifest.cjs
+      - name: Publish the versioned engine release
+        env:
+          VREL_ENGINE: ${{ steps.vtag.outputs.tag }}
+          VERSION: ${{ needs.detect.outputs.version }}
+          REF: ${{ needs.detect.outputs.ref }}
+          UTAG: ${{ needs.detect.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Per-version release, kept forever. A force rebuild of the same
+          # upstream version reuses it and clobbers the assets.
+          gh release create "$VREL_ENGINE" \
+            --title "DeepSeek Harness Engine ${VERSION}" \
+            --notes "Engine closure for DSH Desktop — upstream ${REF}${UTAG:+ (${UTAG})}. Assets: one dsh-engine-<platform>-<sha12>.tar.gz per platform (win32-x64, darwin-x64, darwin-arm64) plus engine-manifest.json. Installed desktop apps pick this build up automatically through the engine channel — no desktop rebuild is required." \
             --target master || true
-          gh release upload $ENGINE_TAG desktop/dsh-engine-*.tar.gz desktop/engine-manifest.json --clobber
-          # Stale cleanup: keep only the assets the fresh manifest references.
+          gh release upload "$VREL_ENGINE" desktop/dsh-engine-*.tar.gz desktop/engine-manifest.json --clobber
+          # Claim the "Latest" slot so the repository homepage release card
+          # tracks engine builds (desktop releases use --latest=false).
+          gh release edit "$VREL_ENGINE" --latest
+      - name: Publish the engine channel pointer
+        run: |
+          set -euo pipefail
+          # The fixed-URL release the desktop updater reads. Manifest only —
+          # the tarballs live on the versioned release, so refreshing this
+          # pointer can never break a download URL.
+          gh release create $ENGINE_TAG \
+            --prerelease --title "DeepSeek Harness Engine (update channel)" \
+            --notes "Engine update channel for the DSH Desktop app — engine-manifest.json only. The desktop sidecar (engine-updater.ts) reads this manifest at a fixed URL to discover the newest engine build; the platform tarballs live on the per-version engine-v<version> release the manifest points at." \
+            --target master || true
+          gh release upload $ENGINE_TAG desktop/engine-manifest.json --clobber
+          # The pointer must never hold tarballs: the manifest above points at
+          # the versioned release, and pre-split builds parked their tarballs
+          # here (legacy). Drop any that remain.
           # (REST API instead of `gh -q` — the query syntax differs across gh
           # versions and has no stable output shape.)
           node -e "
-            const fs = require('fs');
-            const m = JSON.parse(fs.readFileSync('desktop/engine-manifest.json', 'utf8'));
-            const keep = new Set([...Object.values(m.platforms).map(p => p.file), 'engine-manifest.json']);
             const { execSync } = require('child_process');
             (async () => {
               const res = await fetch(
@@ -209,8 +256,8 @@ jobs:
               );
               const data = await res.json();
               for (const a of data.assets || []) {
-                if (!keep.has(a.name) && (a.name.startsWith('dsh-engine-') || a.name === 'engine-manifest.json')) {
-                  console.log('deleting stale asset:', a.name);
+                if (a.name.startsWith('dsh-engine-') && a.name.endsWith('.tar.gz')) {
+                  console.log('removing tarball from the pointer release:', a.name);
                   execSync('gh release delete-asset ' + process.env.ENGINE_TAG + ' ' + a.name + ' --yes');
                 }
               }

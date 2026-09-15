@@ -2,11 +2,18 @@
 /**
  * merge-engine-manifest.cjs — merge per-platform fragments (written by
  * package-engine.cjs) into the single engine-manifest.json the desktop app
- * fetches from the `engine` release.
+ * fetches from the fixed `engine` channel release.
  *
- * Also prints the set of asset file names the manifest references, so the
- * publish step (CI or manual) can delete stale assets from the fixed
- * `engine` release (ref changes the file name; old files would pile up).
+ * CI publishes two releases per build: the per-version `engine-v<version>`
+ * release holding the tarballs, and the fixed `engine` pointer release the
+ * sidecar reads. This manifest is uploaded to BOTH — its asset URLs point at
+ * the versioned release, so the caller supplies the base URL:
+ *
+ *   ENGINE_ASSET_BASE_URL  https://github.com/<repo>/releases/download/engine-v0.1.5-rc.2
+ *   ENGINE_RELEASE_TAG     engine-v0.1.5-rc.2   (recorded as manifest.tag)
+ *
+ * Both fall back to the fixed `engine` tag so local/manual runs keep working.
+ * Also prints the asset file names the manifest references.
  *
  * Usage: node scripts/merge-engine-manifest.cjs
  *   (reads desktop/engine-fragment-*.json, writes desktop/engine-manifest.json)
@@ -21,8 +28,14 @@ const FRAGMENTS = fs
   .filter((f) => /^engine-fragment-.*\.json$/.test(f))
   .sort();
 const OUT = path.join(DESKTOP, 'engine-manifest.json');
+// Asset base URL — the versioned release that actually carries the tarballs.
+// Fallback keeps local/manual runs publishing to the fixed tag.
 const BASE_URL =
+  process.env.ENGINE_ASSET_BASE_URL ||
   'https://github.com/tscodeplus/dsh-desktop/releases/download/engine';
+// Informational only (the sidecar reads platforms[]); names the release this
+// manifest was built for.
+const RELEASE_TAG = process.env.ENGINE_RELEASE_TAG || 'engine';
 
 if (FRAGMENTS.length === 0) {
   console.error('[merge-engine-manifest] no engine-fragment-*.json found — run package-engine.cjs first');
@@ -52,7 +65,7 @@ for (const f of FRAGMENTS) {
 }
 
 const manifest = {
-  tag: 'engine',
+  tag: RELEASE_TAG,
   updatedAt: new Date().toISOString(),
   platforms,
 };

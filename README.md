@@ -3,7 +3,8 @@
 > A community desktop build of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — **this project is a community desktop version built on DeepSeek Harness, not an official DeepSeek product.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
+[![Desktop release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop?filter=v%2A&label=desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
+[![Engine](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop?filter=engine-%2A&label=engine)](https://github.com/tscodeplus/dsh-desktop/releases/tag/engine)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -20,6 +21,7 @@ This project is a **community desktop version built on [DeepSeek Harness](https:
 - **Install & go** — bundled Node.js runtime + pre-built dsh closure; no Node.js install, no terminal. Install, add your API key, and start using it
 - **Three platforms** — official installers for Windows x64, macOS Intel (x64), and macOS Apple Silicon (arm64), built automatically for every release
 - **Auto-update** — checks GitHub Releases in-app; one-click install on Windows, opens the Releases page on unsigned macOS builds
+- **Engine channel** — the bundled dsh closure also updates in-app from the separate [`engine` release](https://github.com/tscodeplus/dsh-desktop/releases/tag/engine), so upstream DeepSeek Harness releases reach installed apps without reinstalling the desktop app
 - **Tauri 2 shell** — native, small, and fast; WebView2 on Windows, WKWebView on macOS
 - **Local-only by design** — dsh serves `http://127.0.0.1:3080`, loaded same-origin with no remote gateway
 - **Robust lifecycle** — the shell spawns the sidecar, which spawns `dsh web`; heartbeat + Job Object (Windows) guarantee no orphan processes on quit, crash, or uninstall

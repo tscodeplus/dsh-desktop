@@ -3,7 +3,8 @@
 > 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的社区桌面版本 —— **本项目是基于 DeepSeek Harness 构建的社区桌面版本，并非 DeepSeek 官方产品。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
+[![Desktop release](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop?filter=v%2A&label=desktop)](https://github.com/tscodeplus/dsh-desktop/releases)
+[![Engine](https://img.shields.io/github/v/release/tscodeplus/dsh-desktop?filter=engine-%2A&label=engine)](https://github.com/tscodeplus/dsh-desktop/releases/tag/engine)
 
 [English](README.md) · **中文**
 
@@ -20,6 +21,7 @@
 - **开箱即用** —— 内置 Node.js 运行时与预构建的 dsh 闭包，无需安装 Node.js、无需命令行；安装后配置 API Key 即可使用
 - **支持三平台** —— 每个版本自动构建 Windows x64、macOS Intel (x64)、macOS Apple Silicon (arm64) 三平台安装包
 - **支持在线更新** —— 应用内自动检查 GitHub Releases 新版本；Windows 一键下载安装，macOS（未签名）引导打开 Releases 页面
+- **引擎通道** —— 内置 dsh 闭包还可从独立的 [`engine` release](https://github.com/tscodeplus/dsh-desktop/releases/tag/engine) 在应用内更新；上游 DeepSeek Harness 发版时，已安装的桌面端无需重装即可获得
 - **Tauri 2 壳** —— 原生、轻量、启动快；Windows 使用 WebView2，macOS 使用 WKWebView
 - **仅限本地** —— dsh 只监听 `http://127.0.0.1:3080`，同源加载，无远程网关
 - **健壮的生命周期管理** —— 壳拉起 sidecar、sidecar 拉起 `dsh web`；心跳检测 + Windows Job Object 保证退出/崩溃/卸载后无孤儿进程
