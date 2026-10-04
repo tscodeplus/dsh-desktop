@@ -23,7 +23,8 @@
     "marked": "^18.0.9",
     "tar": "^7.4.3",
     "undici": "^6.21.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "yaml": "^2.4.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.0",

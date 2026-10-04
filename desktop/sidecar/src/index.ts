@@ -29,6 +29,7 @@ import {
   initEngineUpdater,
 } from './engine-updater.js';
 import { repairProfilesModuleFallback } from './fallback-repair.js';
+import { migrateStalePluginManagerDisable } from './patch-migration.js';
 
 const isDev = process.env.DSHD_DEV === '1';
 const resourcesDir = process.env.DSHD_RESOURCES_DIR ?? process.cwd();
@@ -143,6 +144,21 @@ function spawnDsh(): ChildProcess {
     }
   } catch (e) {
     console.error('[sidecar] profiles fallback repair failed:', e);
+  }
+  // Pre-flight migration: an engine closure 0.2.x+ expects the host
+  // plugin-manager service mounted; a stale user-layer disable of that row
+  // would hang every agent preset that mounts tool-plugin-manager
+  // ("waiting for pluginManager"). Remove the stale row (backed up first).
+  try {
+    const migrated = migrateStalePluginManagerDisable(dshHome, dshRoot);
+    if (migrated) {
+      console.log(
+        `[sidecar] profile patch migration: removed stale rows [${migrated.removedIds.join(', ')}]` +
+          (migrated.backupPath ? ` (backup: ${migrated.backupPath})` : ''),
+      );
+    }
+  } catch (e) {
+    console.error('[sidecar] profile patch migration failed:', e);
   }
   console.log(`[sidecar] starting dsh web (dev=${isDev}, root=${dshRoot})`);
   if (isDev) {
