@@ -56,7 +56,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       changed: ${{ steps.resolve.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: resolve
         name: Resolve target ref and compare with published manifest
         run: |
@@ -129,13 +129,13 @@ jobs:
       # patches mid-update. Same gate as desktop-release.yml — exactly 'on'.
       DSHD_ENABLE_REMOTE_ACCESS: on
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Pin the target ref in dsh-ref.json
         run: node -e "const fs=require('fs');const p='desktop/dsh-ref.json';const d=JSON.parse(fs.readFileSync(p,'utf8'));d.ref='${{ needs.detect.outputs.ref }}';d.tag='${{ needs.detect.outputs.tag }}'||null;d.upstreamVersion='${{ needs.detect.outputs.version }}';d.mode=d.tag?'release':'commit';d.note=d.note||'engine channel build';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\n')"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.7.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # MUST match desktop/.node-version — the bundled runtime ABI.
           node-version-file: desktop/.node-version
@@ -148,7 +148,7 @@ jobs:
       # via the cache fast path (the v0.4.0 engine was rebuilt-from-cache
       # without the official brand for exactly this).
       - name: Cache dsh build closure
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: desktop/.dsh-build
           key: dsh-build-engine-${{ matrix.bundle_platform }}-${{ needs.detect.outputs.ref }}-${{ hashFiles('desktop/scripts/fetch-dsh.cjs', 'desktop/scripts/bundle-deps.cjs', 'desktop/scripts/patch-webui-index.cjs', 'desktop/scripts/patch-connection-privileges.cjs', 'desktop/scripts/patch-settings-origin.cjs') }}
@@ -165,7 +165,7 @@ jobs:
         working-directory: desktop
         run: node scripts/package-engine.cjs
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: engine-${{ matrix.bundle_platform }}
           path: |
@@ -179,9 +179,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
       - name: Stage fragments + tarballs
