@@ -57,10 +57,28 @@ pub fn create_tray(app: &AppHandle, cfg: &DesktopConfig) -> tauri::Result<()> {
 }
 
 fn load_tray_icon(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
-    // Dedicated 128x128 tray asset (tight-cropped glyph from
-    // assets/icon-source.svg via scripts/gen-icons.py) — a downscaled app icon
-    // renders muddy at tray size on Windows.
-    tauri::image::Image::from_bytes(include_bytes!("../../assets/tray-icon.png")).ok()
+    // DPI-precise tray bakes: tray-icon-{16,20,24,32}.png are Lanczos-baked at
+    // the exact physical sizes Windows uses at 100/125/150/200% DPI (tray =
+    // 16 logical px × scale), with alpha hardened so the thin cursive D stays
+    // readable. Handing the shell a native-sized asset avoids the system's
+    // own resample of a 256px master, which rendered as jaggies.
+    let scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+    let bytes: &[u8] = if scale < 1.375 {
+        include_bytes!("../../assets/tray-icon-16.png")
+    } else if scale < 1.75 {
+        include_bytes!("../../assets/tray-icon-20.png")
+    } else if scale < 2.25 {
+        include_bytes!("../../assets/tray-icon-24.png")
+    } else {
+        include_bytes!("../../assets/tray-icon-32.png")
+    };
+    tauri::image::Image::from_bytes(bytes)
+        .ok()
         .or_else(|| app.default_window_icon().cloned().map(|i| i.to_owned()))
 }
 
