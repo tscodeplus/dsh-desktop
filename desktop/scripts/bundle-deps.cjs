@@ -726,6 +726,12 @@ const RUNTIME_DIST_SKIP_DIRS = new Set([
   'scripts',
   'vendor',
   'website',
+  // Pure dev/test artifacts inside the upstream checkout — never read by the
+  // running CLI (its lazy loaders DO read .ts/.md, so src/ and the markdown
+  // stays). Raw savings ~20MB, a few MB after NSIS compression.
+  'tests',
+  '__tests__',
+  'benchmarks',
 ]);
 
 function buildRuntimeDist() {
@@ -736,6 +742,14 @@ function buildRuntimeDist() {
     throw new Error(`dsh build closure not found at ${DSH_DIST_SRC} — run fetch:dsh first`);
   }
   copyRuntimeDist(DSH_DIST_SRC, DSH_RUNTIME_DIST);
+  // Top-level test snapshots (upstream checkout fixture data) — skipped here
+  // rather than in the skip-set so a runtime package owning its own
+  // snapshots/ subtree is unaffected.
+  const topSnapshots = path.join(DSH_RUNTIME_DIST, 'snapshots');
+  if (fs.existsSync(topSnapshots)) {
+    fs.rmSync(topSnapshots, { recursive: true, force: true });
+    log('  dropped top-level snapshots/ (test fixtures)');
+  }
   log(`✅ Runtime closure ready: ${DSH_RUNTIME_DIST}`);
 }
 

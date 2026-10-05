@@ -453,7 +453,33 @@ function Invoke-FetchPnpm {
 function Invoke-TauriBuild {
     Write-Step "Building Tauri app (NSIS)"
 
-    $r = Invoke-Cmd "npx tauri build --bundles nsis" $DesktopDir
+    # Compile first (no bundle), patch exe resources, then bundle. rcedit/mt
+    # must run before NSIS so the installer packs the resource-carrying exe,
+    # and the bundle step must NOT re-run cargo (a rebuild would silently
+    # wipe the patched .rsrc) — `tauri bundle` bundles the already-built exe.
+    # See scripts/fix-exe-resources.cjs for why this workaround exists.
+    $r = Invoke-Cmd "npx tauri build --no-bundle" $DesktopDir
+
+    if (-not $r.Success) {
+        Write-Fail "tauri build failed"
+        Write-Host $r.Output
+        throw "tauri build failed"
+    }
+
+    $exePath = Join-Path $DesktopDir "src-tauri\\target\\release\\dsh-desktop.exe"
+    if (-not (Test-Path $exePath)) {
+        throw "dsh-desktop.exe not found after tauri build"
+    }
+    Write-Step "Patching exe resources (icon / versioninfo / manifest)"
+    $r = Invoke-Cmd "node scripts/fix-exe-resources.cjs src-tauri/target/release/dsh-desktop.exe" $DesktopDir
+    if (-not $r.Success) {
+        Write-Fail "exe resource fixup failed"
+        Write-Host $r.Output
+        throw "fix-exe-resources failed"
+    }
+    Write-OK "Exe resources patched"
+
+    $r = Invoke-Cmd "npx tauri bundle --bundles nsis" $DesktopDir
 
     if (-not $r.Success) {
         Write-Fail "tauri build failed"
