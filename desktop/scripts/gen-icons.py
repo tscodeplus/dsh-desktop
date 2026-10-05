@@ -20,7 +20,9 @@
 #   Tray           tight-cropped art, closest square crop
 #
 # Outputs:
-#   desktop/assets/tray-icon.png            (256x256, tight-cropped full tile)
+#   desktop/assets/tray-icon.png            (256x256, tight-cropped master)
+#   desktop/assets/tray-icon-{16,20,24,32}.png (DPI-precise tray bakes; the
+#          shell picks one by monitor scale so the OS never resamples)
 #   desktop/assets/{icon.png,icon.ico,icon.icns}
 #   desktop/src-tauri/icons/*.png (32/64/128/128@2x/icon, Square*, StoreLogo)
 #   desktop/src-tauri/icons/icon.ico        (16-256, mixed small/full frames)
@@ -148,6 +150,14 @@ def fit_square(img, px, fill_ratio=1.0):
     return canvas
 
 
+def harden_alpha(img, lo=40, gain=1.45):
+    """Small-size rescue for anti-aliased strokes: raise alpha contrast so
+    the tiny raster has harder edges instead of a grey-blue haze."""
+    r, g, b, a = img.split()
+    a = a.point(lambda v: max(0, min(255, round((v - lo) * gain))))
+    return Image.merge("RGBA", (r, g, b, a))
+
+
 def sharpen(img, percent, radius=0.6, threshold=2):
     """RGB-only unsharp mask. Alpha stays untouched so downscaled small sizes
     gain edge contrast WITHOUT a bright/dark halo over transparent corners
@@ -177,7 +187,9 @@ def main():
             # whose downstream render is 24-48px on the taskbar) gets a wider
             # halo so it survives the OS's own downscale. >= 256 are rendered
             # big enough already.
-            if px <= 48:
+            if px <= 24:
+                im = harden_alpha(sharpen(im, 55))
+            elif px <= 48:
                 im = sharpen(im, 55)
             elif px <= 128:
                 im = sharpen(im, 30, radius=1.2)
@@ -195,9 +207,22 @@ def main():
             img.save(path)
             print(f"{rel} ({img.size[0]}x{img.size[1]})")
 
-        # --- tray asset: tight-cropped art (smallest shell size there is) ---
-        tray_src = sharpen(full.resize((256, 256), Image.LANCZOS), 45, radius=1.2)
-        save(fit_square(tray_src, 256, fill_ratio=0.98), "assets/tray-icon.png")
+        # --- tray assets: one master, DPI-precise bakes ---
+        # tray-icon.png stays as the 256px tight-cropped master (generic
+        # fallback). The 16/20/24/32px variants are baked at the exact physical
+        # tray sizes Windows uses at 100/125/150/200% DPI — tray.rs picks one
+        # by monitor scale factor so the shell never has to resample (the
+        # system's own 256→16 downscale is what produced the jaggies).
+        tray_master = fit_square(sharpen(full, 40), 256, fill_ratio=0.98)
+        save(tray_master, "assets/tray-icon.png")
+        save(harden_alpha(tray_master.resize((16, 16), Image.LANCZOS), lo=48, gain=1.35),
+             "assets/tray-icon-16.png")
+        save(harden_alpha(tray_master.resize((20, 20), Image.LANCZOS), lo=44, gain=1.28),
+             "assets/tray-icon-20.png")
+        save(harden_alpha(tray_master.resize((24, 24), Image.LANCZOS), lo=40, gain=1.20),
+             "assets/tray-icon-24.png")
+        save(harden_alpha(tray_master.resize((32, 32), Image.LANCZOS), lo=32, gain=1.10),
+             "assets/tray-icon-32.png")
 
         # --- standard png set ---
         save(F(32), "src-tauri/icons/32x32.png")
