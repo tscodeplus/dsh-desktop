@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidecar",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "DSH Desktop Sidecar — spawns and supervises the dsh web server as a child of the Tauri shell",
   "private": true,
   "type": "module",
