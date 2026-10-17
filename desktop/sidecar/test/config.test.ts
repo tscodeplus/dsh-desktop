@@ -24,8 +24,31 @@ describe('config', () => {
       closeToTray: true,
       autoStart: false,
       theme: 'system',
+      bindAdapter: 'lan',
       firstRunDone: false,
     });
+  });
+
+  it('sanitizes an unknown bindAdapter value back to lan', () => {
+    const home = tempHome();
+    process.env.DSHD_HOME = home;
+    writeFileSync(
+      join(home, 'desktop-config.json'),
+      JSON.stringify({ bindAdapter: 'wifi' }),
+      'utf8',
+    );
+    expect(loadConfig().bindAdapter).toBe('lan');
+  });
+
+  it('preserves a tailscale bindAdapter', () => {
+    const home = tempHome();
+    process.env.DSHD_HOME = home;
+    writeFileSync(
+      join(home, 'desktop-config.json'),
+      JSON.stringify({ bindAdapter: 'tailscale' }),
+      'utf8',
+    );
+    expect(loadConfig().bindAdapter).toBe('tailscale');
   });
 
   it('round-trips a saved config', () => {
@@ -35,6 +58,7 @@ describe('config', () => {
       autoStart: true,
       theme: 'dark' as const,
       language: 'zh-CN' as const,
+      bindAdapter: 'tailscale' as const,
       firstRunDone: true,
     };
     saveConfig(cfg);

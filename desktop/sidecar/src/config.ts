@@ -14,6 +14,13 @@ export interface DesktopConfig {
   theme: 'system' | 'light' | 'dark';
   /** UI language ('en' or 'zh-CN'), persisted across restarts. */
   language?: 'en' | 'zh-CN';
+  /** Which adapter family the web server binds (engine 0.2.1-alpha.5+
+   *  single-bind model). 'lan' = physical LAN adapter, 'tailscale' = tailnet
+   *  CGNAT address so tailnet devices connect directly. Choosing the wrong
+   *  family for the user's workflow restricts direct access to adapters of
+   *  the other family (a proxy hop like `tailscale serve` still works);
+   *  editable from the Web-Access panel, applied by respawning dsh. */
+  bindAdapter?: 'lan' | 'tailscale';
   firstRunDone: boolean;
 }
 
@@ -23,6 +30,7 @@ const DEFAULTS: DesktopConfig = {
   closeToTray: true,
   autoStart: false,
   theme: 'system',
+  bindAdapter: 'lan',
   firstRunDone: false,
 };
 
@@ -34,9 +42,13 @@ function configPath(): string {
 export function loadConfig(): DesktopConfig {
   try {
     const raw = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<DesktopConfig>;
+    // Sanitize unknown bindAdapter values the file may carry from future
+    // versions — lan-bind treats anything but 'tailscale' as 'lan'.
+    const bindAdapter = raw.bindAdapter === 'tailscale' ? 'tailscale' : 'lan';
     return {
       ...DEFAULTS,
       ...raw,
+      bindAdapter: bindAdapter as 'lan' | 'tailscale',
     };
   } catch {
     // Missing or corrupt — start from defaults.

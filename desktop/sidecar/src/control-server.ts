@@ -36,6 +36,11 @@ export interface ControlServerOptions {
   token: string;
   /** Shutdown hook wired to bootstrap().stop() */
   stop: () => Promise<void>;
+  /** Kill + respawn the dsh child through the normal spawn path — the
+   *  pre-flight lan-bind migration then re-reads desktop-config.json and
+   *  rewrites the profile patch layer for the chosen bind adapter. Used by
+   *  the Web-Access panel's bind-adapter switch. */
+  respawnDsh: () => void;
 }
 
 /**
@@ -303,6 +308,30 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ControlSe
       cfg[body.key] = body.value;
       saveConfig(cfg as unknown as DesktopConfig);
       json(res, 200, { ok: true });
+      return;
+    }
+
+    if (path === '/_desktop/bind-adapter' && method === 'PUT') {
+      // Persist the web-server bind-adapter preference and respawn dsh when
+      // it changed — the spawn pre-flight's lan-bind migration then rebinds
+      // (engine 0.2.1-alpha.5+ single-bind model). respawning must happen
+      // ONCE and only on an actual change: the Web-Access panel's Apply
+      // button is idempotent, and a double-click must not kill dsh twice.
+      const body = (await readJson(req)) as { value?: unknown };
+      if (body?.value !== 'lan' && body?.value !== 'tailscale') {
+        json(res, 400, { error: "value must be 'lan' or 'tailscale'" });
+        return;
+      }
+      const cfg = loadConfig();
+      const bindAdapter = body.value as 'lan' | 'tailscale';
+      if (cfg.bindAdapter === bindAdapter) {
+        json(res, 200, { ok: true, changed: false });
+        return;
+      }
+      cfg.bindAdapter = bindAdapter;
+      saveConfig(cfg);
+      setTimeout(() => opts.respawnDsh(), 0);
+      json(res, 200, { ok: true, changed: true, bindAdapter });
       return;
     }
 

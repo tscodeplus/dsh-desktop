@@ -107,6 +107,55 @@
     font-size: 12px;
     line-height: 1.6;
   }
+  /* Bind-adapter preference: segmented LAN/Tailscale + force-restart button. */
+  .bind-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 4px;
+    flex-wrap: wrap;
+  }
+  .bind-row .bind-caption { font-size: 12.5px; color: var(--fg); opacity: .85; }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: auto;
+  }
+  .seg button {
+    border: 0;
+    border-radius: 0;
+    padding: 6px 16px;
+    font-size: 12.5px;
+    background: transparent;
+    color: var(--fg);
+    opacity: .6;
+    cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.on { background: var(--chip-bg); opacity: 1; font-weight: 600; }
+  .seg button:disabled { opacity: .4; cursor: default; }
+  #bind-hint {
+    color: var(--fg);
+    opacity: .75;
+    font-size: 12px;
+    margin-bottom: 10px;
+    line-height: 1.7;
+  }
+  #bind-status {
+    color: var(--muted);
+    font-size: 12px;
+    min-height: 16px;
+    margin-bottom: 10px;
+  }
+  #remote-hint { margin-bottom: 10px; }
+  .bind-block {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
   .footer {
     display: flex;
     justify-content: flex-end;
@@ -133,6 +182,17 @@
   <div class="header" id="hdr"></div>
   <div class="body">
     <div class="remote-hint" id="remote-hint"></div>
+    <div class="bind-block">
+      <div id="bind-hint"></div>
+      <div class="bind-row">
+        <span class="bind-caption" id="bind-label"></span>
+        <div class="seg" id="bind-seg">
+          <button type="button" id="seg-lan"></button>
+          <button type="button" id="seg-ts"></button>
+        </div>
+      </div>
+      <div id="bind-status"></div>
+    </div>
     <div id="remote-list"></div>
   </div>
   <div class="footer">
@@ -161,6 +221,11 @@
     set('remote-hint', L.remoteAccessHint ||
       'Open any of these URLs in a browser on another device on the same network / Tailscale to access the Web UI.');
     set('btn-close', L.close || 'Close');
+    set('bind-hint', L.bindHint ||
+      'The engine binds ONE interface. Picking an option saves it and restarts the service immediately.');
+    set('bind-label', L.bindLabel || 'Bind Adapter');
+    set('seg-lan', L.bindLan || 'LAN');
+    set('seg-ts', L.bindTailnet || 'Tailscale');
 
     document.getElementById('btn-close').onclick = function () {
       if (a.ctlPort) {
@@ -171,65 +236,162 @@
       }
     };
 
-    // List one `?token=` launch URL per SERVED LAN address so another device
-    // can open the Web UI. Since engine 0.2.1-alpha.5 the server binds ONE
-    // concrete interface, so the sidecar now filters the list to the bound
-    // authority (older wildcard engines really did serve every interface).
-    // The token comes from the sidecar (same source the engine status uses);
-    // pre-token engines list plain URLs.
-    var port = a.sidecarPort;
-    if (!port) return;
-    fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
-          encodeURIComponent(a.sidecarToken || ''))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (info) {
-        if (!info || !info.addresses || !info.addresses.length) {
-          var empty = document.createElement('div');
-          empty.className = 'empty';
-          empty.textContent = '暂无可访问的远程地址（本机可能以回环方式绑定，或服务尚未就绪）。';
-          document.getElementById('remote-list').appendChild(empty);
-          return;
-        }
-        var list = document.getElementById('remote-list');
-        info.addresses.forEach(function (addr) {
-          var url = 'http://' + addr + ':' + info.port + '/' +
-            (info.token ? ('?token=' + encodeURIComponent(info.token)) : '');
-          var item = document.createElement('div');
-          item.className = 'remote-item';
-          var u = document.createElement('span');
-          u.className = 'remote-url';
-          u.textContent = url;
-          var btn = document.createElement('button');
-          btn.className = 'remote-copy';
-          btn.type = 'button';
-          btn.textContent = L.copy || 'Copy';
-          btn.onclick = function () {
-            var done = function () {
-              btn.textContent = L.copied || 'Copied';
-              setTimeout(function () { btn.textContent = L.copy || 'Copy'; }, 1500);
-            };
-            var fallback = function () {
-              var ta = document.createElement('textarea');
-              ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-              document.body.appendChild(ta); ta.select();
-              try { document.execCommand('copy'); } catch (e) {}
-              document.body.removeChild(ta); done();
-            };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(url).then(done, fallback);
-            } else { fallback(); }
-          };
-          item.appendChild(u);
-          item.appendChild(btn);
-          list.appendChild(item);
-        });
-      })
-      .catch(function () {
+    function renderList(list, emptyText) {
+      var target = document.getElementById('remote-list');
+      target.innerHTML = '';
+      if (!list || !list.length) {
         var empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = '加载失败，请重试。';
-        document.getElementById('remote-list').appendChild(empty);
+        empty.textContent = emptyText || '暂无可访问的远程地址（本机可能以回环方式绑定，或服务尚未就绪）。';
+        target.appendChild(empty);
+        return;
+      }
+      list.forEach(function (head) {
+        var item = document.createElement('div');
+        item.className = 'remote-item';
+        var u = document.createElement('span');
+        u.className = 'remote-url';
+        u.textContent = head.url;
+        var btn = document.createElement('button');
+        btn.className = 'remote-copy';
+        btn.type = 'button';
+        btn.textContent = L.copy || 'Copy';
+        btn.onclick = function () {
+          var done = function () {
+            btn.textContent = L.copied || 'Copied';
+            setTimeout(function () { btn.textContent = L.copy || 'Copy'; }, 1500);
+          };
+          var fallback = function () {
+            var ta = document.createElement('textarea');
+            ta.value = head.url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta); done();
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(head.url).then(done, fallback);
+          } else { fallback(); }
+        };
+        item.appendChild(u);
+        item.appendChild(btn);
+        target.appendChild(item);
       });
+    }
+    function refreshList() {
+      return fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
+            encodeURIComponent(a.sidecarToken || ''))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (info) {
+          var entries = (info && info.addresses || []).map(function (addr) {
+            return {
+              url: 'http://' + addr + ':' + (info.port || port) + '/' +
+                (info.token ? ('?token=' + encodeURIComponent(info.token)) : '')
+            };
+          });
+          renderList(entries);
+          return entries.length > 0;
+        })
+        .catch(function () {
+          var target = document.getElementById('remote-list');
+          target.innerHTML = '';
+          var empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = '加载失败，请重试。';
+          target.appendChild(empty);
+          return false;
+        });
+    }
+    var port = a.sidecarPort;
+    if (port) void refreshList();
+
+    // ---- Bind-adapter preference (engine 0.2.1-alpha.5+ single-bind model).
+    // Picking an option PUTs the preference and the sidecar RESPWNS dsh (its
+    // spawn pre-flight re-runs the lan-bind migration). The panel polls the
+    // dsh-lan endpoint until the respawned server answers, then re-renders
+    // the list against the new bind/token. The tray menu's Restart re-applies
+    // the binding after a network change without touching this setting.
+    var segLan = document.getElementById('seg-lan');
+    var segTs = document.getElementById('seg-ts');
+    var busy = false;
+    function setSelected(v) {
+      segLan.className = v === 'lan' ? 'on' : '';
+      segTs.className = v === 'tailscale' ? 'on' : '';
+    }
+    function setStatus(text) {
+      var el = document.getElementById('bind-status');
+      if (el) el.textContent = text || '';
+    }
+    function setBusy(on) {
+      busy = on;
+      segLan.disabled = on;
+      segTs.disabled = on;
+    }
+    function currentAdapter() {
+      return (segTs.className || '').indexOf('on') >= 0 ? 'tailscale' : 'lan';
+    }
+    function onPick(value) {
+      if (busy) return;
+      if (value === currentAdapter()) return; // already selected — no-op
+      setBusy(true);
+      setStatus(L.retrying || 'Rebinding and restarting service…');
+      fetch('http://127.0.0.1:' + port + '/_desktop/bind-adapter?token=' +
+            encodeURIComponent(a.sidecarToken || ''), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (a.sidecarToken || ''),
+        },
+        body: JSON.stringify({ value: value }),
+      })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); })
+        .then(function (out) {
+          if (!out || out.ok !== true) throw new Error('bad response');
+          if (out.changed === false) {
+            // Nobody raced us — just reflect the stored value.
+            setSelected(out.bindAdapter === 'tailscale' ? 'tailscale' : 'lan');
+            setStatus(L.bindAlready || 'Already the current selection');
+            setBusy(false);
+            return;
+          }
+          setSelected(value);
+          // Poll until the respawned server announces a launch URL again.
+          var tries = 0;
+          var timer = setInterval(function () {
+            if (tries++ > 20) {
+              clearInterval(timer);
+              setStatus('');
+              setBusy(false);
+              return;
+            }
+            void refreshList().then(function (served) {
+              if (served) {
+                clearInterval(timer);
+                setStatus(L.bindSaved || 'Saved');
+                setTimeout(function () { if (!busy) setStatus(''); }, 2000);
+                setBusy(false);
+              }
+            });
+          }, 2000);
+        })
+        .catch(function () {
+          setStatus(L.bindFailed || 'Operation failed, try again later');
+          setBusy(false);
+        });
+    }
+    segLan.onclick = function () { onPick('lan'); };
+    segTs.onclick = function () { onPick('tailscale'); };
+    // Seed the current choice from the persisted config (the sidecar owns it;
+    // if the read fails, the default 'lan' just shows as selected).
+    if (port) {
+      fetch('http://127.0.0.1:' + port + '/_desktop/config?key=bindAdapter&token=' +
+            encodeURIComponent(a.sidecarToken || ''))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (out) {
+          if (out && out.value === 'tailscale') setSelected('tailscale');
+          else setSelected('lan');
+        })
+        .catch(function () { setSelected('lan'); });
+    }
   })();
 </script>
 </body></html>

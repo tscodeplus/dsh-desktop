@@ -22,6 +22,7 @@ import {
   ensureDataDirs,
   startHeartbeat,
 } from './control-server.js';
+import { loadConfig } from './config.js';
 import { clearDshAuth, handleDshOutputLine } from './dsh-auth.js';
 import {
   applyPendingEngineStaging,
@@ -122,14 +123,16 @@ function attachDshOutput(child: ChildProcess): void {
 }
 
 /** Diagnostic log for the LAN bind pre-flight outcome (changed or not). */
-function logLanBind(outcome: LanBindOutcome): void {
+function logLanBind(outcome: LanBindOutcome, bindAdapter: string): void {
   const trusted = outcome.trustedHosts ? `[${outcome.trustedHosts.join(', ')}]` : 'n/a';
   const suffix = outcome.backupPath ? ` (backup: ${outcome.backupPath})` : '';
   if (outcome.changed) {
-    console.log(`[sidecar] lan-bind: host=${outcome.bindHost} trustedHosts=${trusted}${suffix}`);
+    console.log(
+      `[sidecar] lan-bind (${bindAdapter}): host=${outcome.bindHost} trustedHosts=${trusted}${suffix}`,
+    );
   } else {
     console.log(
-      `[sidecar] lan-bind: unchanged (host=${outcome.bindHost} trustedHosts=${trusted}` +
+      `[sidecar] lan-bind (${bindAdapter}): unchanged (host=${outcome.bindHost} trustedHosts=${trusted}` +
         (outcome.skipped ? `, ${outcome.skipped}` : '') + ')',
     );
   }
@@ -178,13 +181,18 @@ function spawnDsh(): ChildProcess {
   // Pre-flight LAN bind migration (engine 0.2.1-alpha.5+): upstream now bans
   // wildcard binds at the config schema level and dropped the webRuntime
   // service that used to auto-derive trustedHosts — the sidecar owns keeping
-  // one concrete bind address (physical LAN → Tailscale → loopback) and the
-  // matching trustedHosts list current in the user patch layer. The current
-  // values (even when unchanged) go into the log so a reachability regression
-  // can always be traced to the bind the sidecar actually declared.
+  // one concrete bind address (preference-selected: physical LAN or the
+  // tailnet CGNAT, loopback fallback) and the matching trustedHosts list
+  // current in the user patch layer. The current values (even when unchanged)
+  // go into the log so a reachability regression can always be traced to the
+  // bind the sidecar actually declared.
+  // The bind-adapter preference is persisted in desktop-config.json and
+  // editable from the Web-Access panel; a respawn (which re-runs this
+  // pre-flight) is what switches the bind to the other family.
+  const bindAdapter = loadConfig().bindAdapter ?? 'lan';
   try {
-    const lanBind = migrateLanBind(dshHome, dshRoot, Number(dshPort));
-    if (lanBind) logLanBind(lanBind);
+    const lanBind = migrateLanBind(dshHome, dshRoot, Number(dshPort), undefined, bindAdapter);
+    if (lanBind) logLanBind(lanBind, bindAdapter);
   } catch (e) {
     console.error('[sidecar] lan-bind migration failed:', e);
   }
@@ -255,6 +263,7 @@ const controlServer = createControlServer({
   stop: async () => {
     await stopDsh('control');
   },
+  respawnDsh: () => respawnDsh(),
 });
 
 // 4. Engine updater (needs the control API's engine routes up; the updater

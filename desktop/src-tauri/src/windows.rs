@@ -689,6 +689,18 @@ pub fn show_web_access_window(app: &AppHandle) -> tauri::Result<()> {
         ),
         "copy": tr("复制", "Copy", zh),
         "copied": tr("已复制", "Copied", zh),
+        "bindLabel": tr("绑定接口", "Bind Adapter", zh),
+        "bindHint": tr(
+            "引擎一次只绑定一个接口（上游 0.2.1-alpha.5+ 安全模型）。点选后立即保存并自动重启服务，几秒内重绑生效；换网后如需重新应用绑定，请用托盘菜单 → 重启应用（或重启服务）。",
+            "The engine binds ONE interface (upstream 0.2.1-alpha.5+). Picking an option saves it and restarts the service immediately; rebind takes effect within a few seconds. After a network change, reapply via the tray menu → Restart App (or Restart Service).",
+            zh,
+        ),
+        "bindLan": tr("局域网", "LAN", zh),
+        "bindTailnet": tr("Tailscale", "Tailscale", zh),
+        "retrying": tr("正在切换绑定并重启服务…", "Rebinding and restarting service…", zh),
+        "bindSaved": tr("已保存", "Saved", zh),
+        "bindAlready": tr("已是当前选择，无需切换", "Already the current selection", zh),
+        "bindFailed": tr("操作失败，请稍后重试", "Operation failed, try again later", zh),
         "close": tr("关闭", "Close", zh),
     });
     let dark = match crate::config::DesktopConfig::load(&crate::config::config_path(app)).theme.as_str() {

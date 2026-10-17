@@ -94,14 +94,27 @@ export function isIpv4Literal(value: string): boolean {
  * tailnet CGNAT address (Tailscale), then loopback — ordering stable so
  * re-selection is deterministic for the same network state.
  */
-export function selectBindHost(adapters: AdapterAddress[]): string {
+/** Which adapter family the user prefers to bind (Web 端访问 setting). */
+export type BindAdapterPreference = 'lan' | 'tailscale';
+
+export function selectBindHost(
+  adapters: AdapterAddress[],
+  preference: BindAdapterPreference = 'lan',
+): string {
   const physical = adapters.filter(
     (a) => !VIRTUAL_ADAPTER_RE.test(a.name) && isIpv4Literal(a.address) && !isTailnetCgnat(a.address),
   );
-  if (physical.length > 0) return physical[0].address;
   const tailnet = adapters.filter(
     (a) => isIpv4Literal(a.address) && isTailnetCgnat(a.address),
   );
+  if (preference === 'tailscale') {
+    // Tailnet devices connect DIRECTLY to the bound tailnet address; physical
+    // LAN loses direct reachability (still via a proxy/serve hop).
+    if (tailnet.length > 0) return tailnet[0].address;
+    if (physical.length > 0) return physical[0].address;
+    return DEFAULT_BIND_HOST;
+  }
+  if (physical.length > 0) return physical[0].address;
   if (tailnet.length > 0) return tailnet[0].address;
   return DEFAULT_BIND_HOST;
 }
@@ -263,12 +276,17 @@ export interface LanBindOutcome {
  * @param port - the port dsh will listen on (DSHD_PORT).
  * @param adapters - adapter snapshot override (tests inject a fixture; the
  *   default reads the live os.networkInterfaces()).
+ * @param preference - which adapter family to bind ('lan' default; 'tailscale'
+ *   binds the tailnet CGNAT address so tailnet devices connect directly —
+ *   persisted as `desktop-config.json` `bindAdapter`, editable from the Web
+ *   端访问 panel).
  */
 export function migrateLanBind(
   dshHome: string,
   dshRoot: string,
   port: number = DEFAULT_PORT,
   adapters: AdapterAddress[] = currentAdapterAddresses(networkInterfaces()),
+  preference: BindAdapterPreference = 'lan',
 ): LanBindOutcome | null {
   // Version gate: older closures still accept the wildcard compose (and
   // auto-derive trustedHosts from it) — never touch the user layer for them.
@@ -286,7 +304,7 @@ export function migrateLanBind(
     return { changed: false, bindHost: null, trustedHosts: null, skipped: 'old-engine' };
   }
 
-  const bindHost = selectBindHost(adapters);
+  const bindHost = selectBindHost(adapters, preference);
   const trustedHosts = composeTrustedHosts(bindHost, adapters);
 
   const patchFile = join(dshHome, 'profiles', 'web', 'cordis.patch.yml');

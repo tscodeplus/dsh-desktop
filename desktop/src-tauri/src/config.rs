@@ -70,6 +70,10 @@ pub struct DesktopConfig {
     /// "system" | "light" | "dark"
     pub theme: String,
     pub language: Option<String>,
+    /// "lan" | "tailscale" — which adapter the web server binds (engine
+    /// 0.2.1-alpha.5+ single-bind model). Written by the sidecar (primary
+    /// owner of the file); the shell only mirrors it.
+    pub bind_adapter: String,
     pub first_run_done: bool,
 }
 
@@ -80,6 +84,7 @@ impl Default for DesktopConfig {
             auto_start: false,
             theme: "system".into(),
             language: None,
+            bind_adapter: "lan".into(),
             first_run_done: false,
         }
     }

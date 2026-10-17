@@ -92,6 +92,31 @@ describe('selectBindHost', () => {
     expect(selectBindHost([])).toBe('127.0.0.1');
   });
 
+  it('bindAdapter=tailscale prefers the tailnet CGNAT address', () => {
+    expect(
+      selectBindHost(
+        adapters(
+          ['Mihomo', '198.18.0.1'],
+          ['WLAN 2', '192.168.1.203'],
+          ['Tailscale', '100.125.47.56'],
+        ),
+        'tailscale',
+      ),
+    ).toBe('100.125.47.56');
+  });
+
+  it('bindAdapter=tailscale falls back to LAN when no tailnet adapter exists', () => {
+    expect(selectBindHost(adapters(['WLAN 2', '192.168.1.203']), 'tailscale')).toBe(
+      '192.168.1.203',
+    );
+  });
+
+  it('bindAdapter=tailscale still works when the tailnet IP is the ONLY adapter', () => {
+    expect(selectBindHost(adapters(['Tailscale', '100.125.47.56']), 'tailscale')).toBe(
+      '100.125.47.56',
+    );
+  });
+
   it('skips tailnet addresses when picking physical (never binds CGNAT as LAN)', () => {
     expect(
       selectBindHost(adapters(['vEthernet (WSL)', '172.27.48.1'], ['Tailscale', '100.101.1.1'])),
@@ -258,6 +283,28 @@ describe('migrateLanBind (file level)', () => {
     expect(backups.length).toBe(1);
     // The backup carries the ORIGINAL text.
     expect(readFileSync(backups[0], 'utf8')).toBe(PATCH_TEMPLATE);
+  });
+
+  it('bindAdapter=tailscale writes the tailnet address at file level', () => {
+    const home = tempHome();
+    setup(home, PATCH_TEMPLATE);
+    const root = join(home, 'engine', 'dsh-dist');
+    writeEngineRef(root, MIN_LAN_BIND_VERSION);
+    const outcome = migrateLanBind(
+      home,
+      root,
+      3080,
+      adapters(['WLAN 2', '192.168.1.203'], ['Tailscale', '100.125.47.56']),
+      'tailscale',
+    );
+    expect(outcome?.bindHost).toBe('100.125.47.56');
+    // Preserved hostname entries survive; the NON-bound physical LAN IP is
+    // not whitelisted (it has no listener under the single-bind model).
+    expect(outcome?.trustedHosts).toEqual(['100.125.47.56', 'desktop-141inli.taile940d7.ts.net']);
+    const rewritten = readFileSync(join(home, 'profiles', 'web', 'cordis.patch.yml'), 'utf8');
+    expect(rewritten).toContain('host: 100.125.47.56');
+    expect(rewritten).not.toContain('host: 192.168.1.203');
+    expect(rewritten).not.toMatch(/- 192\.168\.1\.203/);
   });
 
   it('is idempotent: the second run skips (unchanged) without a new backup', () => {
