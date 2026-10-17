@@ -171,10 +171,12 @@
       }
     };
 
-    // List one `?token=` launch URL per reachable LAN address (incl. Tailscale
-    // 100.x) so another device can open the Web UI. The token comes from the
-    // sidecar (same source the engine status uses); pre-token engines list
-    // plain URLs.
+    // List one `?token=` launch URL per SERVED LAN address so another device
+    // can open the Web UI. Since engine 0.2.1-alpha.5 the server binds ONE
+    // concrete interface, so the sidecar now filters the list to the bound
+    // authority (older wildcard engines really did serve every interface).
+    // The token comes from the sidecar (same source the engine status uses);
+    // pre-token engines list plain URLs.
     var port = a.sidecarPort;
     if (!port) return;
     fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
@@ -184,7 +186,7 @@
         if (!info || !info.addresses || !info.addresses.length) {
           var empty = document.createElement('div');
           empty.className = 'empty';
-          empty.textContent = '暂无可用地址，请稍候重试。';
+          empty.textContent = '暂无可访问的远程地址（本机可能以回环方式绑定，或服务尚未就绪）。';
           document.getElementById('remote-list').appendChild(empty);
           return;
         }

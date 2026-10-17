@@ -188,22 +188,34 @@ export async function dshHealthProbe(port: number): Promise<boolean> {
 }
 
 /**
- * LAN/Tailscale reachability info for the WebUI remote-access panel. Mirrors
- * OhMyAgent's `/_desktop/webui-token`: enumerate **every** non-internal IPv4 so
- * a device on any interface (e.g. a 192.168.x.x WiFi and the Tailscale
- * 100.x.x.x adapter) can open its own `?token=` launch URL. The launch token
- * is per-process (regenerated on dsh restart) but host-independent, so the same
- * token mints a cookie bound to whichever authority the remote browser uses.
+ * LAN/Tailscale reachability info for the WebUI remote-access panel.
+ *
+ * Since engine 0.2.1-alpha.5 the server binds ONE concrete interface
+ * (wildcard binds are schema-rejected upstream) — dsh's own launch URL
+ * announces the bound authority, and links to any OTHER interface's IPv4
+ * have no listener and fail with ERR_CONNECTION_REFUSED. The list is
+ * therefore filtered to the bound host when one is known: the launch URL's
+ * hostname for LAN/tailnet binds, unchanged (all non-internal IPv4s) for
+ * pre-token engines whose wildcard bind really did serve every interface.
  *
  * @returns token (bare 43-char value) when a token-gated engine is active,
  *   `null` for pre-token engines (remote URLs are then served without token),
- *   plus the server port and all reachable LAN addresses.
+ *   plus the server port and the served (= reachable) LAN addresses.
  */
 export function getDshLanInfo(): {
   token: string | null;
   port: number;
   addresses: string[];
 } {
+  const bindHost = (() => {
+    if (!current?.launchUrl) return null;
+    try {
+      const hostname = new URL(current.launchUrl).hostname;
+      return hostname === '127.0.0.1' || hostname === 'localhost' ? null : hostname;
+    } catch {
+      return null;
+    }
+  })();
   const token = current?.launchUrl
     ? (() => {
         try {
@@ -225,7 +237,10 @@ export function getDshLanInfo(): {
       }
     }
   }
-  return { token, port, addresses };
+  // Single-bind engines serve exactly one authority — links for the other
+  // interfaces are dead (no listener) and only confuse the Web-Access panel.
+  const served = bindHost ? addresses.filter((addr) => addr === bindHost) : addresses;
+  return { token, port, addresses: served };
 }
 
 /**

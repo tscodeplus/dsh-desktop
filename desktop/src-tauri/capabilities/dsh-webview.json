@@ -1,13 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "dsh-webview",
-  "description": "Window-control permissions for the dsh WebUI origin. The main window loads http://127.0.0.1:<port> — a REMOTE origin in the packaged app, so the default capability (local-only) does not apply there; the frameless caption injected by caption.js (drag region + min/max/close) needs these commands on that origin. Any localhost port is matched (server port is configurable); the only localhost server is our bundled dsh.",
+  "description": "Window-control permissions for the dsh WebUI origin. The main window loads the dsh web server over plain HTTP — a REMOTE origin in the packaged app, so the default capability (local-only) does not apply there; the frameless caption injected by caption.js (drag region + min/max/close) needs these commands on that origin.\n\nSince engine 0.2.1-alpha.5 the server binds ONE concrete interface (wildcard binds are schema-rejected upstream): a LAN-bind spawn announces e.g. http://192.168.1.x:3080 and Tailscale-only spawns the 100.x address, so the origin can be ANY http authority — URLPattern cannot express 'any private range' (middle hostname wildcards are invalid), and the main webview only ever loads our own bundled dsh server, so the pattern is scoped to the full wildcard with the main window label. No other destination is ever navigated to in this window.",
   "windows": [
     "main"
   ],
   "remote": {
     "urls": [
-      "http://127.0.0.1:*/*"
+      "http://*:*/*"
     ]
   },
   "permissions": [
