@@ -60,9 +60,12 @@ fn shell_page_url(page: &str) -> WebviewUrl {
     )
 }
 
-/// WebUI URL for the main window. dsh is local-only, so this is always the
-/// loopback web server. `cache_bust` appends a `_ts` query param so a
-/// navigate after config changes isn't served from the webview cache.
+/// WebUI URL for the main window. Preferred base is dsh's own launch URL
+/// (token-carrying): since engine 0.2.1-alpha.5 the server binds ONE concrete
+/// interface — a LAN-bind spawn announces e.g. http://192.168.1.x:3080 and
+/// only that authority listens, so the loopback fallback is for old engines
+/// and for the pre-auth window. `cache_bust` appends a `_ts` query param so
+/// a navigate after config changes isn't served from the webview cache.
 ///
 /// Since DeepSeek Harness 0.1.2-alpha.1 the server prints a `?token=` URL and
 /// gates `/` + `/api` behind a `dsh-auth-*` cookie (BrowserAuth). The sidecar

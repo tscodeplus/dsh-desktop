@@ -110,26 +110,51 @@ export async function handleDshOutputLine(line: string): Promise<void> {
 }
 
 /**
+ * The HTTP root of the URL dsh itself printed (the bind authority). Since
+ * engine 0.2.1-alpha.5 only ONE concrete interface is bound (wildcard binds
+ * are schema-rejected upstream), so on a LAN-bind spawn this differs from
+ * the legacy loopback base — probes must cover both.
+ */
+function launchAuthorityBase(launchUrl: string | null): string | null {
+  if (!launchUrl) return null;
+  try {
+    const u = new URL(launchUrl);
+    return `${u.protocol}//${u.host}/`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Authenticated health probe for the DSH web server.
  * Tries:
  *   1. If we have a cached cookie → GET / with Cookie
  *   2. If we have a launchUrl without cookie yet → retry exchange then probe
  *   3. Fallback plain GET / (old engine)
- * Returns true when the server answers 2xx.
+ * Every stage probes BOTH the legacy loopback base and — when dsh announced
+ * a different one — the launch-URL's own authority (a LAN-bind spawn has no
+ * loopback listener; probing only 127.0.0.1 would fail a healthy server and,
+ * in the engine updater, roll back a good swap).
+ * Returns true when the server answers 2xx on any base.
  */
 export async function dshHealthProbe(port: number): Promise<boolean> {
-  const base = `http://127.0.0.1:${port}/`;
+  const bases = [`http://127.0.0.1:${port}/`];
+  const launchBase = launchAuthorityBase(current?.launchUrl ?? null);
+  if (launchBase && launchBase !== bases[0]) bases.push(launchBase);
+
   const auth = current;
   if (auth?.cookie) {
-    try {
-      const r = await fetch(base, {
-        headers: { Cookie: auth.cookie },
-        signal: AbortSignal.timeout(2000),
-      });
-      if (r.ok) return true;
-      // Cookie might be stale after engine swap — fall through to plain
-    } catch {
-      /* try plain */
+    for (const base of bases) {
+      try {
+        const r = await fetch(base, {
+          headers: { Cookie: auth.cookie },
+          signal: AbortSignal.timeout(2000),
+        });
+        if (r.ok) return true;
+        // Cookie might be stale after engine swap — fall through to plain
+      } catch {
+        /* try plain */
+      }
     }
   }
   if (auth?.launchUrl && !auth.cookie) {
@@ -137,24 +162,29 @@ export async function dshHealthProbe(port: number): Promise<boolean> {
     const cookie = await exchangeToken(auth.launchUrl);
     if (cookie) {
       current = { launchUrl: auth.launchUrl, cookie };
-      try {
-        const r = await fetch(base, {
-          headers: { Cookie: cookie },
-          signal: AbortSignal.timeout(2000),
-        });
-        if (r.ok) return true;
-      } catch {
-        /* fall through */
+      for (const base of bases) {
+        try {
+          const r = await fetch(base, {
+            headers: { Cookie: cookie },
+            signal: AbortSignal.timeout(2000),
+          });
+          if (r.ok) return true;
+        } catch {
+          /* fall through */
+        }
       }
     }
   }
   // Plain probe — works for old engine, and also for new engine's 401→fallback
-  try {
-    const r = await fetch(base, { signal: AbortSignal.timeout(2000) });
-    return r.ok;
-  } catch {
-    return false;
+  for (const base of bases) {
+    try {
+      const r = await fetch(base, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) return true;
+    } catch {
+      /* next base */
+    }
   }
+  return false;
 }
 
 /**

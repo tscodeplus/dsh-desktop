@@ -371,6 +371,16 @@ function shouldSkip(relativePath) {
   // Normalize to forward slashes — on Windows, path.join produces backslashes
   // but our SKIP_PATTERNS use forward slashes (cross-platform compatibility).
   const normalized = relativePath.replace(/\\/g, '/');
+  // Runtime skill assets INSIDE packages must survive the markdown pruning:
+  // dsh's skills system reads each bundled package's
+  // assets/<skill-name>/SKILL.md as the skill body (a pruned SKILL.md makes
+  // every boot's skill scan log an ENOENT error for that asset). The
+  // SKIP_PATTERNS .mdx rule below is for DOCS markdown — package assets are
+  // runtime material, not docs. relativePath is package-qualified
+  // ("<pkg>/<assets>/..."), so match the assets dir at ANY depth.
+  if ((normalized.endsWith('.md') || normalized.endsWith('.mdx')) && /(^|\/)assets\//.test(normalized)) {
+    return false;
+  }
   for (const pattern of SKIP_PATTERNS) {
     if (pattern.test(normalized)) return true;
   }

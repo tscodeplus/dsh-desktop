@@ -587,6 +587,33 @@ async fn fetch_dsh_cookie_from_sidecar(
     Some(cookie.to_string())
 }
 
+/// Probe targets for the health loop. The legacy loopback base always comes
+/// first; when the sidecar has pushed dsh's own launch URL, that authority
+/// is probed too — since engine 0.2.1-alpha.5 only ONE concrete interface is
+/// bound (upstream schema-rejects wildcard binds), so a LAN-bind spawn has NO
+/// loopback listener and a loopback-only probe would fail a healthy server
+/// (and, during a Starting phase, trip the "启动超时" error window).
+fn webui_probe_urls(state: &Arc<SidecarState>, server_port: u16) -> Vec<String> {
+    let loopback = format!("http://127.0.0.1:{server_port}/");
+    if let Ok(guard) = state.dsh_auth.try_read() {
+        if let Some(auth) = guard.as_ref() {
+            if let Ok(u) = reqwest::Url::parse(&auth.launch_url) {
+                let mut authority = u.host_str().unwrap_or_default().to_string();
+                if let Some(p) = u.port() {
+                    authority = format!("{authority}:{p}");
+                }
+                if !authority.is_empty() {
+                    let base = format!("{}://{authority}/", u.scheme());
+                    if base != loopback {
+                        return vec![loopback, base];
+                    }
+                }
+            }
+        }
+    }
+    vec![loopback]
+}
+
 async fn probe_dsh(client: &reqwest::Client, url: &str, state: &SidecarState) -> bool {
     // 1. Cached cookie (pushed via POST /dsh-auth or cached from fetch)
     if let Ok(guard) = state.dsh_auth.try_read() {
@@ -628,12 +655,19 @@ async fn health_loop(app: AppHandle, state: Arc<SidecarState>, server_port: u16)
             return;
         }
     };
-    let url = format!("http://127.0.0.1:{server_port}/");
-
     let mut consecutive_failures: u32 = 0;
 
     loop {
-        let healthy = probe_dsh(&client, &url, &state).await;
+        // Loopback first (covers every pre-LAN-bind composition and the
+        // ctl fallback); then the launch-URL authority for LAN-bind spawns.
+        let urls = webui_probe_urls(&state, server_port);
+        let mut healthy = false;
+        for url in &urls {
+            if probe_dsh(&client, url, &state).await {
+                healthy = true;
+                break;
+            }
+        }
         let snapshot = state.snapshot().await;
 
         match snapshot.kind {

@@ -29,6 +29,7 @@ import {
   initEngineUpdater,
 } from './engine-updater.js';
 import { repairProfilesModuleFallback } from './fallback-repair.js';
+import { migrateLanBind, type LanBindOutcome } from './lan-bind.js';
 import { migrateStalePluginManagerDisable } from './patch-migration.js';
 
 const isDev = process.env.DSHD_DEV === '1';
@@ -120,6 +121,20 @@ function attachDshOutput(child: ChildProcess): void {
   child.stderr?.on('data', onChunk);
 }
 
+/** Diagnostic log for the LAN bind pre-flight outcome (changed or not). */
+function logLanBind(outcome: LanBindOutcome): void {
+  const trusted = outcome.trustedHosts ? `[${outcome.trustedHosts.join(', ')}]` : 'n/a';
+  const suffix = outcome.backupPath ? ` (backup: ${outcome.backupPath})` : '';
+  if (outcome.changed) {
+    console.log(`[sidecar] lan-bind: host=${outcome.bindHost} trustedHosts=${trusted}${suffix}`);
+  } else {
+    console.log(
+      `[sidecar] lan-bind: unchanged (host=${outcome.bindHost} trustedHosts=${trusted}` +
+        (outcome.skipped ? `, ${outcome.skipped}` : '') + ')',
+    );
+  }
+}
+
 /** Spawn the prod CLI bundle (`apps/cli/lib/bin.js`) with the given args. */
 function spawnDshWeb(webArgs: string[]): ChildProcess {
   const entry = join(dshRoot, 'apps', 'cli', 'lib', 'bin.js');
@@ -159,6 +174,19 @@ function spawnDsh(): ChildProcess {
     }
   } catch (e) {
     console.error('[sidecar] profile patch migration failed:', e);
+  }
+  // Pre-flight LAN bind migration (engine 0.2.1-alpha.5+): upstream now bans
+  // wildcard binds at the config schema level and dropped the webRuntime
+  // service that used to auto-derive trustedHosts — the sidecar owns keeping
+  // one concrete bind address (physical LAN → Tailscale → loopback) and the
+  // matching trustedHosts list current in the user patch layer. The current
+  // values (even when unchanged) go into the log so a reachability regression
+  // can always be traced to the bind the sidecar actually declared.
+  try {
+    const lanBind = migrateLanBind(dshHome, dshRoot, Number(dshPort));
+    if (lanBind) logLanBind(lanBind);
+  } catch (e) {
+    console.error('[sidecar] lan-bind migration failed:', e);
   }
   console.log(`[sidecar] starting dsh web (dev=${isDev}, root=${dshRoot})`);
   if (isDev) {
