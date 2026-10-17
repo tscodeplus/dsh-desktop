@@ -1,7 +1,7 @@
 {
-  "ref": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
-  "tag": "dsh-v0.2.1-alpha.5",
-  "upstreamVersion": "0.2.1-alpha.5",
+  "ref": "1600d8a1e140dcde43a1a0941940a0480712c011",
+  "tag": "dsh-v0.2.1-rc.1",
+  "upstreamVersion": "0.2.1-rc.1",
   "mode": "release",
-  "note": "跟随 DeepSeek Harness 发版 tag dsh-v0.2.1-alpha.5（v0.6.3 桌面版随附，作为全新安装的种子引擎；配合本版桌面配置层的 lan-bind 迁移，不可再使用 0.0.0.0 通配绑定）。"
+  "note": "跟随 DeepSeek Harness 发版 tag dsh-v0.2.1-rc.1（0.2.1 首个 RC，替代 0.6.3 桌面版随附的 alpha.5 种子引擎，同名 0.6.3 安装包重构建覆盖）。"
 }
