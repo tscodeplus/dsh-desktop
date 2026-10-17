@@ -43,7 +43,7 @@ const PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied after e
   config:
     trustedHosts:
       - 0.0.0.0
-      - desktop-141inli.taile940d7.ts.net
+      - mydevice.example.ts.net
 # A user settings row after the LAN rows must survive untouched.
 - id: ui-theme
   name: "@deepseek-ai/dsh-client-ui-theme"
@@ -71,16 +71,16 @@ describe('selectBindHost', () => {
       selectBindHost(
         adapters(
           ['Mihomo', '198.18.0.1'],
-          ['WLAN 2', '192.168.1.203'],
+          ['WLAN 2', '192.168.10.11'],
           ['vEthernet (Default Switch)', '172.27.48.1'],
         ),
       ),
-    ).toBe('192.168.1.203');
+    ).toBe('192.168.10.11');
   });
 
   it('falls back to the tailnet CGNAT address when no physical adapter exists', () => {
-    expect(selectBindHost(adapters(['Mihomo', '198.18.0.1'], ['Tailscale', '100.125.47.56']))).toBe(
-      '100.125.47.56',
+    expect(selectBindHost(adapters(['Mihomo', '198.18.0.1'], ['Tailscale', '100.64.7.7']))).toBe(
+      '100.64.7.7',
     );
   });
 
@@ -97,23 +97,23 @@ describe('selectBindHost', () => {
       selectBindHost(
         adapters(
           ['Mihomo', '198.18.0.1'],
-          ['WLAN 2', '192.168.1.203'],
-          ['Tailscale', '100.125.47.56'],
+          ['WLAN 2', '192.168.10.11'],
+          ['Tailscale', '100.64.7.7'],
         ),
         'tailscale',
       ),
-    ).toBe('100.125.47.56');
+    ).toBe('100.64.7.7');
   });
 
   it('bindAdapter=tailscale falls back to LAN when no tailnet adapter exists', () => {
-    expect(selectBindHost(adapters(['WLAN 2', '192.168.1.203']), 'tailscale')).toBe(
-      '192.168.1.203',
+    expect(selectBindHost(adapters(['WLAN 2', '192.168.10.11']), 'tailscale')).toBe(
+      '192.168.10.11',
     );
   });
 
   it('bindAdapter=tailscale still works when the tailnet IP is the ONLY adapter', () => {
-    expect(selectBindHost(adapters(['Tailscale', '100.125.47.56']), 'tailscale')).toBe(
-      '100.125.47.56',
+    expect(selectBindHost(adapters(['Tailscale', '100.64.7.7']), 'tailscale')).toBe(
+      '100.64.7.7',
     );
   });
 
@@ -127,39 +127,39 @@ describe('selectBindHost', () => {
 describe('composeTrustedHosts', () => {
   it('always includes the bind host plus the tailnet IPv4s', () => {
     const list = composeTrustedHosts(
-      '192.168.1.203',
-      adapters(['WLAN 2', '192.168.1.203'], ['Tailscale', '100.125.47.56'], ['Mihomo', '198.18.0.1']),
+      '192.168.10.11',
+      adapters(['WLAN 2', '192.168.10.11'], ['Tailscale', '100.64.7.7'], ['Mihomo', '198.18.0.1']),
     );
-    expect(list).toContain('192.168.1.203');
-    expect(list).toContain('100.125.47.56');
+    expect(list).toContain('192.168.10.11');
+    expect(list).toContain('100.64.7.7');
     // Virtual proxy adapters are never trusted.
     expect(list).not.toContain('198.18.0.1');
   });
 
   it('dedupes when the bind host is itself a tailnet address', () => {
     const list = composeTrustedHosts(
-      '100.125.47.56',
-      adapters(['Tailscale', '100.125.47.56']),
+      '100.64.7.7',
+      adapters(['Tailscale', '100.64.7.7']),
     );
-    expect(list).toEqual(['100.125.47.56']);
+    expect(list).toEqual(['100.64.7.7']);
   });
 });
 
 describe('composeLanBindPatch', () => {
   it('rewrites host to the concrete value and statically lists trustedHosts', () => {
     const result = composeLanBindPatch(PATCH_TEMPLATE, {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203', '100.125.47.56'],
+      trustedHosts: ['192.168.10.11', '100.64.7.7'],
     });
     expect(result.changed).toBe(true);
-    expect(result.bindHost).toBe('192.168.1.203');
-    expect(result.trustedHosts).toEqual(['192.168.1.203', '100.125.47.56', 'desktop-141inli.taile940d7.ts.net']);
+    expect(result.bindHost).toBe('192.168.10.11');
+    expect(result.trustedHosts).toEqual(['192.168.10.11', '100.64.7.7', 'mydevice.example.ts.net']);
     const text = result.text;
-    expect(text).toContain('host: 192.168.1.203');
+    expect(text).toContain('host: 192.168.10.11');
     expect(text).not.toContain('0.0.0.0');
     // Preserved hostname entries survive the IP rewrite.
-    expect(text).toContain('desktop-141inli.taile940d7.ts.net');
+    expect(text).toContain('mydevice.example.ts.net');
     // Block style (not flow) sequences.
     expect(text).toMatch(/trustedHosts:\n {6}- /);
     // Untouched rows and comments survive.
@@ -169,14 +169,14 @@ describe('composeLanBindPatch', () => {
 
   it('replaces legacy !!js interpolations with plain values', () => {
     const result = composeLanBindPatch(PATCH_WITH_JS, {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203'],
+      trustedHosts: ['192.168.10.11'],
     });
     expect(result.changed).toBe(true);
     // Both custom-tag scalars are gone (comment text aside).
     expect(result.text.replace(/^#.*$/gm, '')).not.toContain('!!js');
-    expect(result.text).toContain('host: 192.168.1.203');
+    expect(result.text).toContain('host: 192.168.10.11');
     expect(result.text).toContain('port: 3080');
     // The MagicDNS name from the old interpolation is preserved as a static entry.
     expect(result.text).toContain('magic.name.ts.net');
@@ -184,23 +184,23 @@ describe('composeLanBindPatch', () => {
 
   it('is idempotent: a second run with the same values changes nothing', () => {
     const first = composeLanBindPatch(PATCH_TEMPLATE, {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203', '100.125.47.56', 'desktop-141inli.taile940d7.ts.net'],
+      trustedHosts: ['192.168.10.11', '100.64.7.7', 'mydevice.example.ts.net'],
     });
     const second = composeLanBindPatch(first.text, {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203', '100.125.47.56'],
+      trustedHosts: ['192.168.10.11', '100.64.7.7'],
     });
     expect(second.changed).toBe(false);
   });
 
   it('passes malformed YAML through unchanged', () => {
     const result = composeLanBindPatch('- [unclosed, {\n  host: x', {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203'],
+      trustedHosts: ['192.168.10.11'],
     });
     expect(result.changed).toBe(false);
     expect(result.text).toBe('- [unclosed, {\n  host: x');
@@ -208,9 +208,9 @@ describe('composeLanBindPatch', () => {
 
   it('passes a non-sequence document through unchanged', () => {
     const result = composeLanBindPatch('# just a comment\n', {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203'],
+      trustedHosts: ['192.168.10.11'],
     });
     expect(result.changed).toBe(false);
   });
@@ -219,9 +219,9 @@ describe('composeLanBindPatch', () => {
     const result = composeLanBindPatch(PATCH_TEMPLATE.slice(
       PATCH_TEMPLATE.indexOf('- id: ui-theme'),
     ), {
-      bindHost: '192.168.1.203',
+      bindHost: '192.168.10.11',
       port: 3080,
-      trustedHosts: ['192.168.1.203'],
+      trustedHosts: ['192.168.10.11'],
     });
     expect(result.changed).toBe(false);
     expect(result.text).toContain('preference: dark');
@@ -263,22 +263,22 @@ describe('migrateLanBind (file level)', () => {
       3080,
       adapters(
         ['Mihomo', '198.18.0.1'],
-        ['WLAN 2', '192.168.1.203'],
-        ['Tailscale', '100.125.47.56'],
+        ['WLAN 2', '192.168.10.11'],
+        ['Tailscale', '100.64.7.7'],
       ),
     );
     expect(outcome).not.toBeNull();
     expect(outcome?.changed).toBe(true);
-    expect(outcome?.bindHost).toBe('192.168.1.203');
+    expect(outcome?.bindHost).toBe('192.168.10.11');
     expect(outcome?.trustedHosts).toEqual([
-      '192.168.1.203',
-      '100.125.47.56',
-      'desktop-141inli.taile940d7.ts.net',
+      '192.168.10.11',
+      '100.64.7.7',
+      'mydevice.example.ts.net',
     ]);
     const rewritten = readFileSync(join(home, 'profiles', 'web', 'cordis.patch.yml'), 'utf8');
-    expect(rewritten).toContain('host: 192.168.1.203');
-    expect(rewritten).toContain('- 100.125.47.56');
-    expect(rewritten).toContain('desktop-141inli.taile940d7.ts.net');
+    expect(rewritten).toContain('host: 192.168.10.11');
+    expect(rewritten).toContain('- 100.64.7.7');
+    expect(rewritten).toContain('mydevice.example.ts.net');
     const backups = existsBackups(home);
     expect(backups.length).toBe(1);
     // The backup carries the ORIGINAL text.
@@ -294,16 +294,16 @@ describe('migrateLanBind (file level)', () => {
       home,
       root,
       3080,
-      adapters(['WLAN 2', '192.168.1.203'], ['Tailscale', '100.125.47.56']),
+      adapters(['WLAN 2', '192.168.10.11'], ['Tailscale', '100.64.7.7']),
       'tailscale',
     );
-    expect(outcome?.bindHost).toBe('100.125.47.56');
+    expect(outcome?.bindHost).toBe('100.64.7.7');
     // Preserved hostname entries survive; the NON-bound physical LAN IP is
     // not whitelisted (it has no listener under the single-bind model).
-    expect(outcome?.trustedHosts).toEqual(['100.125.47.56', 'desktop-141inli.taile940d7.ts.net']);
+    expect(outcome?.trustedHosts).toEqual(['100.64.7.7', 'mydevice.example.ts.net']);
     const rewritten = readFileSync(join(home, 'profiles', 'web', 'cordis.patch.yml'), 'utf8');
-    expect(rewritten).toContain('host: 100.125.47.56');
-    expect(rewritten).not.toContain('host: 192.168.1.203');
+    expect(rewritten).toContain('host: 100.64.7.7');
+    expect(rewritten).not.toContain('host: 192.168.10.11');
     expect(rewritten).not.toMatch(/- 192\.168\.1\.203/);
   });
 
@@ -312,7 +312,7 @@ describe('migrateLanBind (file level)', () => {
     setup(home, PATCH_TEMPLATE);
     const root = join(home, 'engine', 'dsh-dist');
     writeEngineRef(root, MIN_LAN_BIND_VERSION);
-    const stubAdapters = adapters(['WLAN 2', '192.168.1.203']);
+    const stubAdapters = adapters(['WLAN 2', '192.168.10.11']);
     migrateLanBind(home, root, 3080, stubAdapters);
     const second = migrateLanBind(home, root, 3080, stubAdapters);
     expect(second?.changed).toBe(false);
@@ -365,10 +365,10 @@ describe('version gate and IP classifiers', () => {
   it('gates at exactly the first wildcard-banning release and classifies IPs', () => {
     expect(MIN_LAN_BIND_VERSION).toBe('0.2.1-alpha.5');
     expect(compareVersions(MIN_LAN_BIND_VERSION, '0.2.1-alpha.5')).toBeLessThanOrEqual(0);
-    expect(isIpv4Literal('192.168.1.203')).toBe(true);
+    expect(isIpv4Literal('192.168.10.11')).toBe(true);
     expect(isIpv4Literal('magic.name.ts.net')).toBe(false);
-    expect(isTailnetCgnat('100.125.47.56')).toBe(true);
-    expect(isTailnetCgnat('192.168.1.203')).toBe(false);
+    expect(isTailnetCgnat('100.64.7.7')).toBe(true);
+    expect(isTailnetCgnat('192.168.10.11')).toBe(false);
     expect(isTailnetCgnat('100.63.0.1')).toBe(false);
     expect(isTailnetCgnat('100.128.0.1')).toBe(false);
   });

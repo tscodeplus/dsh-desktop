@@ -225,18 +225,18 @@ describe('patch-plugin-fences transforms', () => {
 describe('publish contract vs the plugin fence (regression)', () => {
   // A LAN deployment's connection.trustedHosts: auto-derived LAN/Tailscale IP
   // literals (webRuntime) + the profile's MagicDNS name (cordis.patch.yml).
-  const deploymentHosts = ['198.18.0.1', '100.64.0.12', 'desktop-141inli.taile940d7.ts.net'];
+  const deploymentHosts = ['198.18.0.1', '100.64.0.12', 'mydevice.example.ts.net'];
   const env = publishedEnv(deploymentHosts);
 
   it('publishes the hostname-only, comma-separated shape the fence expects', () => {
-    expect(env).toBe('198.18.0.1,100.64.0.12,desktop-141inli.taile940d7.ts.net');
+    expect(env).toBe('198.18.0.1,100.64.0.12,mydevice.example.ts.net');
   });
 
   it('lets a LAN/Tailscale browser pass the plugin fence (the 403 regression)', () => {
     const previous = process.env.DSH_PLUGIN_MANAGER_TRUSTED_HOSTS;
     process.env.DSH_PLUGIN_MANAGER_TRUSTED_HOSTS = env;
     try {
-      for (const host of ['198.18.0.1:3080', '100.64.0.12:3080', 'desktop-141inli.taile940d7.ts.net:3080']) {
+      for (const host of ['198.18.0.1:3080', '100.64.0.12:3080', 'mydevice.example.ts.net:3080']) {
         expect(isTrustedRequest({
           headers: {
             host,

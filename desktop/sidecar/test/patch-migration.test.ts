@@ -54,7 +54,7 @@ const REAL_PATCH = `# Your patch layer for this dsh profile, applied after every
 #   --host 0.0.0.0 ban only guards the flag path — deployments layer config).
 #   With 0.0.0.0 the trust fence auto-derives LAN + Tailscale IP literals.
 # - connection: extend trustedHosts with the MagicDNS name so \`tailscale
-#   serve\` hops (Host = desktop-141inli.taile940d7.ts.net) pass the /api fence.
+#   serve\` hops (Host = mydevice.example.ts.net) pass the /api fence.
 - id: webserver
   config:
     host: '0.0.0.0'
@@ -64,7 +64,7 @@ const REAL_PATCH = `# Your patch layer for this dsh profile, applied after every
     # NOTE: the array expression must be QUOTED — unquoted \`!!js [...]\` parses
     # as a YAML flow-sequence node (kind=sequence) and js-yaml v4 then fails
     # "unknown tag" because the !!js type is registered for scalars only.
-    trustedHosts: !!js "[...ctx.webRuntime.trustedHosts, 'desktop-141inli.taile940d7.ts.net']"
+    trustedHosts: !!js "[...ctx.webRuntime.trustedHosts, 'mydevice.example.ts.net']"
 # dsh-plugin-manager:managed:start
 - id: plugin-manager
   disabled: true
@@ -96,7 +96,7 @@ describe('removeStalePluginManagerDisable (pure core)', () => {
     expect(migration.text).toContain('host: \'0.0.0.0\'');
     expect(migration.text).toContain('!!js ctx.webStartup.port ?? 3080');
     expect(migration.text).toContain(
-      '!!js "[...ctx.webRuntime.trustedHosts, \'desktop-141inli.taile940d7.ts.net\']"',
+      '!!js "[...ctx.webRuntime.trustedHosts, \'mydevice.example.ts.net\']"',
     );
     // ...user settings rows survive...
     expect(migration.text).toContain('nemotron-3.5-lightning-free');
