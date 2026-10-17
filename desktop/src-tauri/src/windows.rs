@@ -720,9 +720,9 @@ pub fn show_web_access_window(app: &AppHandle) -> tauri::Result<()> {
     let init = format!("window.__DSHD_WEBACCESS__ = {};", payload);
     WebviewWindowBuilder::new(app, WEB_ACCESS_LABEL, shell_page_url("web-access.html"))
         .title(tr("Web 端访问", "Web Access", zh))
-        // Tall enough that hint + bind selector + address list + footer fit
-        // without scrolling at the default size.
-        .inner_size(480.0, 520.0)
+        // Tall enough for hint + bind selector + ONE address row + footer
+        // without scrolling (multi-address gap lists are never rendered).
+        .inner_size(480.0, 450.0)
         .resizable(true)
         .decorations(false)
         .background_color(tauri::window::Color::from(if dark { (20, 20, 31) } else { (250, 250, 252) }))

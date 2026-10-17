@@ -242,6 +242,12 @@
     };
 
     function renderList(list, emptyText) {
+      // Desktop engines (0.2.1-alpha.5+) serve exactly ONE authority. A
+      // multi-entry list only ever appears in the respawn gap (bind
+      // authority unknown → the endpoint falls back to every interface,
+      // virtual adapters included) — never render it; show the empty state
+      // until the single real link is back.
+      if (list && list.length > 1) list = [];
       var target = document.getElementById('remote-list');
       target.innerHTML = '';
       if (!list || !list.length) {
@@ -282,32 +288,51 @@
         target.appendChild(item);
       });
     }
-    function refreshList() {
+    function fetchEntries() {
       return fetch('http://127.0.0.1:' + port + '/_desktop/dsh-lan?token=' +
             encodeURIComponent(a.sidecarToken || ''))
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (info) {
-          var entries = (info && info.addresses || []).map(function (addr) {
+          return (info && info.addresses || []).map(function (addr) {
             return {
               url: 'http://' + addr + ':' + (info.port || port) + '/' +
                 (info.token ? ('?token=' + encodeURIComponent(info.token)) : '')
             };
           });
-          renderList(entries);
-          return entries.length > 0;
         })
-        .catch(function () {
-          var target = document.getElementById('remote-list');
-          target.innerHTML = '';
-          var empty = document.createElement('div');
-          empty.className = 'empty';
-          empty.textContent = '加载失败，请重试。';
-          target.appendChild(empty);
-          return false;
-        });
+        .catch(function () { return null; });
+    }
+    function refreshList() {
+      return fetchEntries().then(function (entries) {
+        if (!entries) {
+          renderList([], '加载失败，请重试。');
+          return [];
+        }
+        renderList(entries);
+        return entries;
+      });
     }
     var port = a.sidecarPort;
-    if (port) void refreshList();
+    if (port) {
+      void refreshList();
+      // If the panel opened inside the respawn/startup gap (empty or
+      // suppressed multi-entry list), keep checking until the single served
+      // link is announced. Idle otherwise — one fetch per 3s for a minute.
+      var initTries = 0;
+      var initTimer = setInterval(function () {
+        if (busy || initTries++ > 20) {
+          clearInterval(initTimer);
+          return;
+        }
+        void fetchEntries().then(function (entries) {
+          if (entries && (entries.length === 1 || entries.length === 0)) {
+            renderList(entries);
+            if (entries.length === 1) clearInterval(initTimer);
+          }
+          // entries === null (fetch failed) or multi (gap): leave DOM as-is
+        });
+      }, 3000);
+    }
 
     // ---- Bind-adapter preference (engine 0.2.1-alpha.5+ single-bind model).
     // Picking an option PUTs the preference and the sidecar RESPWNS dsh (its
@@ -378,12 +403,15 @@
               setBusy(false);
               return;
             }
-            void refreshList().then(function (served) {
+            void refreshList().then(function () {
+              // The pre-switch list stays in the DOM through the gap (multi
+              // entries are suppressed in renderList), so "changed" can be
+              // read straight off what is rendered.
               var now = Array.from(document.querySelectorAll('#remote-list .remote-url'))
                 .map(function (el) { return el.textContent; });
               var changed = now.length === 1 &&
                 (before.length !== 1 || now[0] !== before[0]);
-              if (served && changed) {
+              if (changed) {
                 clearInterval(timer);
                 setStatus(L.bindSaved || 'Saved');
                 setTimeout(function () { if (!busy) setStatus(''); }, 2000);
