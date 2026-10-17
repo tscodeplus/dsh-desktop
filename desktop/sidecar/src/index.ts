@@ -220,8 +220,16 @@ function spawnDsh(): ChildProcess {
   return watchDsh(spawnDshWeb(['web', '--no-open']), true);
 }
 
-/** (Re)spawn dsh — used at boot and by engine-updater.ts after a swap. */
-export function respawnDsh(): ChildProcess {
+/** (Re)spawn dsh — used at boot and by engine-updater.ts after a swap.
+ *  Stops a still-running child FIRST: respawning over a live child leaves
+ *  the old instance holding the bind port and the new one dies with
+ *  EADDRINUSE (observed on the Web-Access bind-adapter switch, whose caller
+ *  does no stop of its own). Stopping is async, so the spawn happens once
+ *  the old child is actually gone. */
+export async function respawnDsh(): Promise<ChildProcess> {
+  if (dshChild && !dshChild.killed) {
+    await stopDshChild('respawn');
+  }
   dshChild = spawnDsh();
   return dshChild;
 }
@@ -263,7 +271,9 @@ const controlServer = createControlServer({
   stop: async () => {
     await stopDsh('control');
   },
-  respawnDsh: () => respawnDsh(),
+  respawnDsh: () => {
+    void respawnDsh();
+  },
 });
 
 // 4. Engine updater (needs the control API's engine routes up; the updater
@@ -279,7 +289,7 @@ initEngineUpdater({
   killDsh: () => stopDshChild('engine-swap'),
   respawn: (root) => {
     dshRoot = root;
-    respawnDsh();
+    void respawnDsh();
   },
 });
 if (ENGINE_STARTUP_CHECK_ENABLED && !isDev) {

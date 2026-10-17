@@ -134,7 +134,12 @@
     cursor: pointer;
   }
   .seg button + button { border-left: 1px solid var(--border); }
-  .seg button.on { background: var(--chip-bg); opacity: 1; font-weight: 600; }
+  .seg button.on {
+    background: #1f6feb;
+    color: #fff;
+    opacity: 1;
+    font-weight: 600;
+  }
   .seg button:disabled { opacity: .4; cursor: default; }
   #bind-hint {
     color: var(--fg);
@@ -332,6 +337,12 @@
     function onPick(value) {
       if (busy) return;
       if (value === currentAdapter()) return; // already selected — no-op
+      // Snapshot the CURRENT served links: the respawn takes seconds and the
+      // old instance keeps answering until it is stopped, so "list non-empty"
+      // is not enough — only accept the poll once the served list actually
+      // differs from what was shown before the switch.
+      var before = Array.from(document.querySelectorAll('#remote-list .remote-url'))
+        .map(function (el) { return el.textContent; });
       setBusy(true);
       setStatus(L.retrying || 'Rebinding and restarting service…');
       fetch('http://127.0.0.1:' + port + '/_desktop/bind-adapter?token=' +
@@ -355,16 +366,24 @@
           }
           setSelected(value);
           // Poll until the respawned server announces a launch URL again.
+          // Accept only when the served list CHANGED vs the pre-switch
+          // snapshot AND is a single link (the stop window lists every
+          // interface, and the old instance's list matches the snapshot —
+          // neither may be taken as "the new bind is live").
           var tries = 0;
           var timer = setInterval(function () {
-            if (tries++ > 20) {
+            if (tries++ > 30) {
               clearInterval(timer);
               setStatus('');
               setBusy(false);
               return;
             }
             void refreshList().then(function (served) {
-              if (served) {
+              var now = Array.from(document.querySelectorAll('#remote-list .remote-url'))
+                .map(function (el) { return el.textContent; });
+              var changed = now.length === 1 &&
+                (before.length !== 1 || now[0] !== before[0]);
+              if (served && changed) {
                 clearInterval(timer);
                 setStatus(L.bindSaved || 'Saved');
                 setTimeout(function () { if (!busy) setStatus(''); }, 2000);

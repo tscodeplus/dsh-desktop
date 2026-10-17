@@ -1,7 +1,7 @@
 {
-  "ref": "1600d8a1e140dcde43a1a0941940a0480712c011",
-  "tag": "dsh-v0.2.1-rc.1",
-  "upstreamVersion": "0.2.1-rc.1",
+  "ref": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "tag": "dsh-v0.2.1-rc.2",
+  "upstreamVersion": "0.2.1-rc.2",
   "mode": "release",
-  "note": "跟随 DeepSeek Harness 发版 tag dsh-v0.2.1-rc.1（0.2.1 首个 RC，替代 0.6.3 桌面版随附的 alpha.5 种子引擎，同名 0.6.3 安装包重构建覆盖）。"
+  "note": "跟随 DeepSeek Harness 发版 tag dsh-v0.2.1-rc.2（同名 0.6.3 安装包重构建覆盖，同时带上绑定偏好 UI 与 respawn 先停后启修复）。"
 }

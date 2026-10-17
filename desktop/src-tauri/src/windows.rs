@@ -720,7 +720,9 @@ pub fn show_web_access_window(app: &AppHandle) -> tauri::Result<()> {
     let init = format!("window.__DSHD_WEBACCESS__ = {};", payload);
     WebviewWindowBuilder::new(app, WEB_ACCESS_LABEL, shell_page_url("web-access.html"))
         .title(tr("Web 端访问", "Web Access", zh))
-        .inner_size(460.0, 360.0)
+        // Tall enough that hint + bind selector + address list + footer fit
+        // without scrolling at the default size.
+        .inner_size(480.0, 520.0)
         .resizable(true)
         .decorations(false)
         .background_color(tauri::window::Color::from(if dark { (20, 20, 31) } else { (250, 250, 252) }))
