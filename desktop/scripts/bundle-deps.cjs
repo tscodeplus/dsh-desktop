@@ -57,7 +57,12 @@ const BUNDLE_MANIFEST_FILE = path.join(STAGING, 'bundle-manifest.json');
 // -win32-x64 platform variant) now prefer the plain-semver package instead of
 // letting the variant overwrite it (which stripped bin.codex and crashed the
 // driver at import).
-const BUNDLE_DEPS_VERSION = 11;
+// v12: drop dsh-dist/packages/<group>/<name> for every package the flat
+// staging tree already provides (~113 MB duplicated in both the installer and
+// the engine tarball). Only manifests declaring `dsh.bundle` are kept, because
+// that is the sole runtime reader of the checkout layout (plugin-manager's
+// official-install-target). See pruneRuntimeWorkspacePackages().
+const BUNDLE_DEPS_VERSION = 12;
 // Mirrors every log line to .sidecar-deps/bundle.log so build.ps1 (which
 // buffers cmd output until the command exits) can be tailed for progress.
 const LOG_FILE = path.join(STAGING, 'bundle.log');
@@ -760,7 +765,95 @@ function buildRuntimeDist() {
     fs.rmSync(topSnapshots, { recursive: true, force: true });
     log('  dropped top-level snapshots/ (test fixtures)');
   }
+  pruneRuntimeWorkspacePackages();
   log(`✅ Runtime closure ready: ${DSH_RUNTIME_DIST}`);
+}
+
+/** Recursive byte size of a directory tree (for prune logging only). */
+function treeSizeBytes(dir) {
+  let total = 0;
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const file = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(file);
+      } else {
+        try {
+          total += fs.statSync(file).size;
+        } catch {
+          /* vanished — ignore */
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Drop the workspace copy of packages the flat staging tree already provides.
+ *
+ * dsh-dist/packages/* * /lib is a byte-identical duplicate of
+ * node_modules/@deepseek-ai/<name>/lib: the CLI is spawned as
+ * `<node> dsh-dist/apps/cli/lib/bin.js` and every bare `@deepseek-ai/*` import
+ * resolves UP from dsh-dist into sidecar/node_modules (dsh-dist ships no
+ * node_modules of its own), so the checkout copy is never imported. It used to
+ * ship ~113 MB of duplicate code (84 MB byte-identical, the rest .ts/.d.ts/.md
+ * the staging tree prunes on purpose) in both the installer and the engine
+ * tarball.
+ *
+ * The ONE runtime consumer of the checkout layout is the plugin manager's
+ * official-install-target resolution: it globs `packages/* * /package.json`
+ * under the dsh root, selects the entry whose manifest name matches the
+ * requested official bundle, and then requires that entry's `main` and
+ * cordis.patch.yml files to exist on disk. Only manifests declaring
+ * `dsh.bundle` are ever selectable, so those packages (20 of 342, <1 MB) stay
+ * complete; every other package (api/*, client/*, tool/*, experimental/* …) is
+ * unreachable through that path and is dropped.
+ */
+function pruneRuntimeWorkspacePackages() {
+  const packagesDir = path.join(DSH_RUNTIME_DIST, 'packages');
+  if (!fs.existsSync(packagesDir)) return;
+  let removedPackages = 0;
+  let removedBytes = 0;
+  let keptPackages = 0;
+  for (const group of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!group.isDirectory()) continue;
+    const groupDir = path.join(packagesDir, group.name);
+    for (const entry of fs.readdirSync(groupDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const pkgDir = path.join(groupDir, entry.name);
+      let manifest;
+      try {
+        manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
+      } catch {
+        // No readable manifest — not selectable as a bundle either.
+        manifest = undefined;
+      }
+      if (manifest !== undefined && manifest.dsh?.bundle !== undefined) {
+        keptPackages += 1;
+        continue;
+      }
+      removedBytes += treeSizeBytes(pkgDir);
+      fs.rmSync(pkgDir, { recursive: true, force: true });
+      removedPackages += 1;
+    }
+    if (fs.readdirSync(groupDir).length === 0) {
+      fs.rmdirSync(groupDir);
+    }
+  }
+  log(
+    `  ✂ packages/: dropped ${removedPackages} workspace copies ` +
+      `(~${(removedBytes / 1048576).toFixed(0)} MB, duplicated in node_modules), ` +
+      `kept ${keptPackages} dsh.bundle package(s)`,
+  );
 }
 
 /**
