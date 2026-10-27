@@ -62,7 +62,9 @@ const BUNDLE_MANIFEST_FILE = path.join(STAGING, 'bundle-manifest.json');
 // the engine tarball). Only manifests declaring `dsh.bundle` are kept, because
 // that is the sole runtime reader of the checkout layout (plugin-manager's
 // official-install-target). See pruneRuntimeWorkspacePackages().
-const BUNDLE_DEPS_VERSION = 12;
+// v13: drop dsh-dist/apps/desktop (upstream Electron app, ~3.9 MB) — the Tauri
+// shell replaces it and nothing in the CLI resolves that directory.
+const BUNDLE_DEPS_VERSION = 13;
 // Mirrors every log line to .sidecar-deps/bundle.log so build.ps1 (which
 // buffers cmd output until the command exits) can be tailed for progress.
 const LOG_FILE = path.join(STAGING, 'bundle.log');
@@ -764,6 +766,17 @@ function buildRuntimeDist() {
   if (fs.existsSync(topSnapshots)) {
     fs.rmSync(topSnapshots, { recursive: true, force: true });
     log('  dropped top-level snapshots/ (test fixtures)');
+  }
+  // Upstream Electron application (apps/desktop): Electron main, electron-builder
+  // config, the NSIS installer scripts and renderer chrome. DSH Desktop ships a
+  // Tauri shell instead, and nothing in the running CLI resolves this directory
+  // — apps/cli only rejects the *profile* named "desktop" (a dsh profile the
+  // Electron app owns), which this app never uses (it runs `--profile web`).
+  // ~3.9 MB of dead weight in both the installer and the engine tarball.
+  const electronApp = path.join(DSH_RUNTIME_DIST, 'apps', 'desktop');
+  if (fs.existsSync(electronApp)) {
+    fs.rmSync(electronApp, { recursive: true, force: true });
+    log('  dropped apps/desktop (upstream Electron app — the Tauri shell replaces it)');
   }
   pruneRuntimeWorkspacePackages();
   log(`✅ Runtime closure ready: ${DSH_RUNTIME_DIST}`);
