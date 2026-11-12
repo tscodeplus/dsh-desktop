@@ -18,6 +18,14 @@
 # upstream's latest tag against the already-published manifest; a difference
 # triggers the 3-platform build matrix and an atomic publish.
 #
+# No artifact-service round-trip: each matrix job uploads its own tarball
+# (~210-260 MB) plus a few-hundred-byte engine-fragment-<platform>.json
+# straight to the versioned release, and `publish` reads the fragments back
+# with `gh release download`, merges the manifest, and deletes the fragments.
+# The artifact service answered CreateArtifact/FinalizeArtifact with HTML error
+# pages on run 43094179685 (5 retries on both build jobs), which killed an
+# otherwise good build — the tarballs never needed to pass through it.
+#
 # Triggered daily (01:13 UTC and 13:13 UTC — Beijing 09:13 / 21:13, off the
 # 02:00 check-upstream cron) and manually via workflow_dispatch (inputs.ref
 # overrides the target for tests, e.g. "dsh-v0.1.0-rc.7" or a full sha).
@@ -54,6 +62,10 @@ jobs:
       ref: ${{ steps.resolve.outputs.ref }}
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
+      # Versioned release tag (engine-v<version> / engine-<sha12>). Computed
+      # here because BOTH the build matrix (uploads its tarball straight to
+      # that release) and publish (merges the manifest onto it) need it.
+      vtag: ${{ steps.resolve.outputs.vtag }}
       changed: ${{ steps.resolve.outputs.changed }}
     steps:
       - uses: actions/checkout@v5
@@ -81,7 +93,13 @@ jobs:
           [ -n "$REF" ] || { echo "could not resolve ref"; exit 1; }
           VERSION="${TAG#dsh-v}"
           [ -n "$VERSION" ] || VERSION="$REF"
-          echo "resolved: ref=$REF tag=${TAG:-<none>} version=$VERSION"
+          # Tagged upstream ref -> engine-v<version>; bare commit -> engine-<sha12>.
+          if [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+            VTAG="engine-${REF:0:12}"
+          else
+            VTAG="engine-v${VERSION}"
+          fi
+          echo "resolved: ref=$REF tag=${TAG:-<none>} version=$VERSION vtag=$VTAG"
           # 2. Already-published manifest (404 → never published → build).
           MANIFEST="$(curl -sfL "https://github.com/$DESKTOP_REPO/releases/download/$ENGINE_TAG/engine-manifest.json" || true)"
           FORCE="${{ github.event.inputs.force || 'false' }}"
@@ -105,6 +123,7 @@ jobs:
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "vtag=$VTAG" >> "$GITHUB_OUTPUT"
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
 
   build:
@@ -118,9 +137,17 @@ jobs:
             bundle_platform: win32-x64
           - runner: macos-15-intel
             bundle_platform: darwin-x64
-          - runner: macos-14
+          # macos-15 is the arm64 standard image (macos-15-intel is the x64
+          # one). Do NOT go back to macos-14: GitHub stopped provisioning
+          # that arm64 configuration ("The configuration
+          # 'macos-14-arm64-us-default' is not supported"), which failed the
+          # whole matrix in 1s.
+          - runner: macos-15
             bundle_platform: darwin-arm64
     runs-on: ${{ matrix.runner }}
+    # Full closure build + pack is ~25 min/platform; a hung runner must not
+    # burn an hour of the schedule slot.
+    timeout-minutes: 90
     env:
       DSHD_TARGET_PLATFORM: ${{ matrix.bundle_platform }}
       # Engine closures must carry the same LAN/Tailscale patch passes as the
@@ -164,73 +191,143 @@ jobs:
       - name: Package engine asset
         working-directory: desktop
         run: node scripts/package-engine.cjs
-      - name: Upload artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: engine-${{ matrix.bundle_platform }}
-          path: |
-            desktop/dsh-engine-*.tar.gz
-            desktop/engine-fragment-*.json
-          if-no-files-found: error
+
+      # Publish straight to the versioned release instead of round-tripping a
+      # ~200-260 MB tarball through the artifact service. That round-trip is
+      # exactly what broke in run 43094179685: CreateArtifact / FinalizeArtifact
+      # answered with an HTML error page on both build jobs (5 retries each),
+      # killing the run even though the closure built fine. The release asset is
+      # the real destination, so upload it once from the job that built it.
+      # The fragment (a few hundred bytes) rides along; publish downloads the
+      # fragments back with `gh release download` and deletes them afterwards,
+      # so engine-build.yml no longer depends on upload-artifact at all.
+      - name: Upload tarball + fragment to the versioned release
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VREL_ENGINE: ${{ needs.detect.outputs.vtag }}
+          VERSION: ${{ needs.detect.outputs.version }}
+          REF: ${{ needs.detect.outputs.ref }}
+          UTAG: ${{ needs.detect.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la dsh-engine-*.tar.gz engine-fragment-*.json
+          # Draft until `publish` merges the manifest: a half-populated release
+          # must not be download-able, and GitHub would otherwise hand the
+          # "Latest" slot to a build that has not published anything yet.
+          # Idempotent: the three matrix jobs race on the create; the loser
+          # gets "already exists" and carries on with its upload. A force
+          # rebuild of the same upstream version reuses the release and
+          # clobbers its assets.
+          gh release create "$VREL_ENGINE" --draft --target master \
+            --title "DeepSeek Harness Engine ${VERSION}" \
+            --notes "Engine closure for DSH Desktop — upstream ${REF}${UTAG:+ (${UTAG})}. Assets: one dsh-engine-<platform>-<sha12>.tar.gz per platform (win32-x64, darwin-x64, darwin-arm64) plus engine-manifest.json." \
+            2>/dev/null || true
+          # Release-asset upload is a chunked multipart REST call that can also
+          # hiccup; retry rather than losing the 20-minute build.
+          for attempt in 1 2 3; do
+            if gh release upload "$VREL_ENGINE" dsh-engine-*.tar.gz engine-fragment-*.json --clobber; then
+              exit 0
+            fi
+            echo "upload failed (attempt $attempt/3), retrying in $((attempt * 10))s ..."
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not upload the engine tarball to $VREL_ENGINE"
+          exit 1
 
   publish:
     needs: [detect, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
-      - name: Download platform artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-      - name: Stage fragments + tarballs
-        run: |
-          mkdir -p desktop
-          find artifacts -name 'dsh-engine-*.tar.gz' -exec cp {} desktop/ \;
-          find artifacts -name 'engine-fragment-*.json' -exec cp {} desktop/ \;
-          ls -la desktop/dsh-engine-*.tar.gz desktop/engine-fragment-*.json
-      - name: Compute the versioned release tag
-        id: vtag
+      # Fragments were uploaded next to the tarballs by each build job (they are
+      # the only inter-job hand-off — the tarballs never leave the release).
+      - name: Download engine fragments from the versioned release
         env:
-          VERSION: ${{ needs.detect.outputs.version }}
-          REF: ${{ needs.detect.outputs.ref }}
+          VREL_ENGINE: ${{ needs.detect.outputs.vtag }}
         run: |
           set -euo pipefail
-          # Tagged upstream ref -> engine-v<version>; bare commit -> engine-<sha12>.
-          if [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]]; then
-            TAG="engine-${REF:0:12}"
-          else
-            TAG="engine-v${VERSION}"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "versioned release tag: $TAG"
+          mkdir -p desktop
+          for attempt in 1 2 3; do
+            if gh release download "$VREL_ENGINE" \
+              --pattern 'engine-fragment-*.json' --dir desktop --clobber; then
+              break
+            fi
+            echo "fragment download failed (attempt $attempt/3), retrying in $((attempt * 5))s ..."
+            sleep $((attempt * 5))
+            [ "$attempt" = 3 ] && exit 1
+          done
+          ls -la desktop/engine-fragment-*.json
+          # All three platforms must be present, or the manifest would describe
+          # an engine some users cannot install.
+          COUNT=$(ls desktop/engine-fragment-*.json | wc -l | tr -d ' ')
+          echo "fragments: $COUNT"
+          [ "$COUNT" -eq 3 ] || { echo "::error::expected 3 platform fragments, got $COUNT"; exit 1; }
       - name: Merge manifest
         working-directory: desktop
         env:
           # URLs must point at the versioned release that carries the tarballs;
           # the fixed `engine` pointer gets a byte-identical copy of this file.
-          ENGINE_ASSET_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.vtag.outputs.tag }}
-          ENGINE_RELEASE_TAG: ${{ steps.vtag.outputs.tag }}
+          ENGINE_ASSET_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.detect.outputs.vtag }}
+          ENGINE_RELEASE_TAG: ${{ needs.detect.outputs.vtag }}
         run: node scripts/merge-engine-manifest.cjs
       - name: Publish the versioned engine release
         env:
-          VREL_ENGINE: ${{ steps.vtag.outputs.tag }}
+          VREL_ENGINE: ${{ needs.detect.outputs.vtag }}
           VERSION: ${{ needs.detect.outputs.version }}
           REF: ${{ needs.detect.outputs.ref }}
           UTAG: ${{ needs.detect.outputs.tag }}
         run: |
           set -euo pipefail
-          # Per-version release, kept forever. A force rebuild of the same
-          # upstream version reuses it and clobbers the assets.
-          gh release create "$VREL_ENGINE" \
+          # Per-version release, kept forever. The tarballs are already on it
+          # as a DRAFT uploaded by the build jobs; this step owns the metadata,
+          # the manifest, the cleanup and the un-drafting.
+          gh release create "$VREL_ENGINE" --draft \
             --title "DeepSeek Harness Engine ${VERSION}" \
             --notes "Engine closure for DSH Desktop — upstream ${REF}${UTAG:+ (${UTAG})}. Assets: one dsh-engine-<platform>-<sha12>.tar.gz per platform (win32-x64, darwin-x64, darwin-arm64) plus engine-manifest.json. Installed desktop apps pick this build up automatically through the engine channel — no desktop rebuild is required." \
-            --target master || true
-          gh release upload "$VREL_ENGINE" desktop/dsh-engine-*.tar.gz desktop/engine-manifest.json --clobber
-          # Claim the "Latest" slot so the repository homepage release card
-          # tracks engine builds (desktop releases use --latest=false).
-          gh release edit "$VREL_ENGINE" --latest
+            --target master 2>/dev/null || true
+          # Refuse to publish a manifest whose tarballs are not all on the
+          # release: the updater would then 404 mid-update.
+          gh release view "$VREL_ENGINE" --json assets -q '.assets[].name' > /tmp/assets.txt
+          missing=0
+          for f in desktop/engine-fragment-*.json; do
+            name=$(node -p "require('./$f').file")
+            if grep -qxF "$name" /tmp/assets.txt; then
+              echo "ok: $name"
+            else
+              echo "::error::tarball $name is not on $VREL_ENGINE"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          gh release upload "$VREL_ENGINE" desktop/engine-manifest.json --clobber
+          # Drop what this release no longer references: the staging fragments,
+          # plus tarballs for any stale sha12 — an upstream re-tag keeps the
+          # engine version while the closure ref (and thus the file name)
+          # changes, and force rebuilds would otherwise accumulate assets.
+          KEEP=$(node -e "const p=require('./desktop/engine-manifest.json').platforms;process.stdout.write(Object.values(p).map(x=>x.file).join('\n'))")
+          for name in $(cat /tmp/assets.txt); do
+            case "$name" in
+              engine-fragment-*.json) stale=1 ;;
+              dsh-engine-*.tar.gz)
+                stale=1
+                for k in $KEEP; do [ "$k" = "$name" ] && stale=0; done
+                ;;
+              *) stale=0 ;;
+            esac
+            if [ "$stale" = "1" ]; then
+              echo "removing stale asset: $name"
+              gh release delete-asset "$VREL_ENGINE" "$name" --yes || true
+            fi
+          done
+          # Claim the "Latest" slot and make the draft public, so the
+          # repository homepage release card tracks engine builds (desktop
+          # releases use --latest=false).
+          gh release edit "$VREL_ENGINE" --draft=false --latest
       - name: Publish the engine channel pointer
         env:
           PTR_TITLE: DeepSeek Harness Engine (update channel)

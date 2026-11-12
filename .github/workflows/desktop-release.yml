@@ -76,12 +76,17 @@ jobs:
           # The x64 job MUST run on the Intel runner: pnpm on arm64
           # runners installs only darwin-arm64 native modules, so the
           # x64 closure would be missing darwin-x64 prebuilds.
+          #
+          # The arm64 job uses macos-15 (the arm64 standard image) — NOT
+          # macos-14, which GitHub stopped provisioning for arm64 ("The
+          # configuration 'macos-14-arm64-us-default' is not supported",
+          # engine-build run 43094179685 / 42582628412).
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             bundle_platform: darwin-x64
             cache_key: x86_64-apple-darwin
             artifact_suffix: ''
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64-apple-darwin
             bundle_platform: darwin-arm64
             cache_key: aarch64-apple-darwin
